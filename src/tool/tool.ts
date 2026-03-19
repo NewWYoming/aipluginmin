@@ -1,4 +1,4 @@
-import { AI } from "../AI/AI"
+﻿import { AI } from "../AI/AI"
 import { ConfigManager } from "../config/configManager"
 import { registerAttr } from "./tool_attr"
 import { registerBan } from "./tool_ban"
@@ -123,6 +123,7 @@ export interface CmdInfo {
 
 export class Tool {
     info: ToolInfo;
+    getInfo: () => ToolInfo;
     cmdInfo: CmdInfo; // 海豹指令信息
     type: string; // 可使用函数的聊天场景类型："private" | "group" | "all"
     tool_choice: string; // 是否可以继续调用函数："none" | "auto" | "required"
@@ -130,6 +131,7 @@ export class Tool {
 
     constructor(info: ToolInfo) {
         this.info = info;
+        this.getInfo = () => this.info;
         this.cmdInfo = {
             ext: '',
             name: '',
@@ -518,7 +520,7 @@ export class ToolManager {
                     if (tool.type !== "all" && tool.type !== type) {
                         return null;
                     }
-                    return tool.info;
+                    return tool.getInfo();
                 } else {
                     return null;
                 }
@@ -551,3 +553,5 @@ export class ToolManager {
         return '';
     }
 }
+
+
