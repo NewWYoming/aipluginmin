@@ -18,7 +18,7 @@ function buildDeckToolInfo(): ToolInfo {
         type: "function",
         function: {
             name: "draw_deck",
-            description: `用牌堆名称抽取牌堆，返回抽取结果${descriptionSuffix}`,
+            description: `按牌堆名称实际抽取一次牌堆内容；仅在需要抽卡时调用，不要用这个函数查询牌堆列表${descriptionSuffix}`,
             parameters: {
                 type: "object",
                 properties: {
@@ -35,6 +35,27 @@ function buildDeckToolInfo(): ToolInfo {
 }
 
 export function registerDeck() {
+    const toolList = new Tool({
+        type: "function",
+        function: {
+            name: "list_decks",
+            description: "获取当前允许提供给AI使用的牌堆名称列表；当你只是想知道有哪些牌堆时调用这个函数，不要抽卡",
+            parameters: {
+                type: "object",
+                properties: {},
+                required: []
+            }
+        }
+    });
+    toolList.solve = async () => {
+        const deckNames = getDeckNames();
+        if (deckNames.length === 0) {
+            return { content: "当前没有配置可用牌堆", images: [] };
+        }
+
+        return { content: `当前可用牌堆:${deckNames.join("、")}`, images: [] };
+    }
+
     const toolDraw = new Tool(buildDeckToolInfo());
     toolDraw.getInfo = () => buildDeckToolInfo();
 
@@ -65,7 +86,7 @@ export function registerDeck() {
             return { content: `牌堆${name}结果为空:${dr.err}`, images: [] };
         }
 
-        seal.replyToSender(ctx, msg, result);
+        //seal.replyToSender(ctx, msg, result); // 不发送原消息，直接返回结果给AI
         return { content: result, images: [] };
     }
 }
