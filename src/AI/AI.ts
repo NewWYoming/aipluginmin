@@ -170,15 +170,9 @@ export class AI {
         if (isTool && tools) {
             const loop = new ToolCallLoop(client, requestConfig);
             const result = await loop.run(ctx, msg, this, messages, tools);
+            const replyText = result.content;
 
-            if (result.content) {
-                const finalResponse = await client.chat(
-                    messages,
-                    null,
-                    'none',
-                    { enabled: requestConfig.thinkingEnabled, effort: requestConfig.reasoningEffort },
-                );
-                const replyText = finalResponse.content || result.content;
+            if (replyText) {
                 const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, replyText);
                 await this.reply(ctx, msg, contextArray, replyArray, images);
             }
