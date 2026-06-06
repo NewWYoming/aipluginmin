@@ -128,4 +128,51 @@ export function registerImage() {
             return { content: `图像生成失败：${e}`, images: [] };
         }
     }
+
+    const toolSendImage = new Tool({
+        type: 'function',
+        function: {
+            name: 'send_image',
+            description: '发送一张图片或表情包。根据描述从图库中匹配最合适的图片。当需要表达情绪、玩梗或配图时使用。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    description: {
+                        type: 'string',
+                        description: '图片描述，如"开心的猫"、"疑惑"、"拍桌大笑"'
+                    }
+                },
+                required: ['description']
+            }
+        }
+    });
+    toolSendImage.solve = async (ctx, msg, ai, args) => {
+        const desc = args.description;
+        if (!desc) return { content: '[send_image] 缺少描述参数', images: [] };
+
+        // Load local images into pool (idempotent)
+        ai.imagePool.loadLocalImages();
+
+        const entry = ai.imagePool.search(desc);
+        if (!entry) return { content: '[未找到匹配"' + desc + '"的图片]', images: [] };
+
+        // Validate stolen image URLs
+        if (entry.source === 'stolen') {
+            const img = new Image();
+            img.file = entry.file;
+            if (!await img.checkImageUrl()) {
+                ai.imagePool.remove(entry.id);
+                // Retry once after removing expired
+                const retry = ai.imagePool.search(desc);
+                if (retry) {
+                    seal.replyToSender(ctx, msg, '[CQ:image,file=' + retry.file + ']');
+                    return { content: '', images: [] };
+                }
+                return { content: '[匹配的图片链接已过期]', images: [] };
+            }
+        }
+
+        seal.replyToSender(ctx, msg, '[CQ:image,file=' + entry.file + ']');
+        return { content: '', images: [] };
+    };
 }
