@@ -264,18 +264,6 @@ async function transformContentToText(ctx: seal.MsgContext, ai: AI, content: str
                 text += `[CQ:reply,id=${transformMsgIdBack(msgId)}]`;
                 break;
             }
-            case 'img': {
-                const id = seg.content;
-                const image = await ai.context.findImage(ctx, id);
-
-                if (image) {
-                    images.push(image);
-                    text += image.CQCode;
-                } else {
-                    logger.warning(`无法找到图片：${id}`);
-                }
-                break;
-            }
             case 'face': {
                 const faceId = Object.keys(faceMap).find(key => faceMap[key] === seg.content) || '';
                 text += faceId ? `[CQ:face,id=${faceId}]` : '';
