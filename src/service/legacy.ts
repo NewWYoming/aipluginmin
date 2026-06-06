@@ -75,6 +75,7 @@ export async function sendITTRequest(messages: {
         if (!bodyObject.hasOwnProperty('messages')) {
           bodyObject.messages = messages;
         }
+        bodyObject.response_format = { type: 'json_object' };
         if (!bodyObject.hasOwnProperty('model')) {
           throw new Error('body中没有model');
         }
