@@ -225,8 +225,10 @@ ${img.CQCode}`;
 
             // Auto-steal: if emoji and probability hits → store in ImagePool
             if (isEmoji) {
+                logger.info(`检测到表情包: ${text2 || '(无描述)'}`);
                 const { p } = ConfigManager.image;
-                if (Math.random() * 100 < p) {
+                const rolled = Math.random() * 100;
+                if (rolled < p) {
                     this.imagePool.add({
                         id: image.id,
                         file: image.file,
@@ -234,6 +236,9 @@ ${img.CQCode}`;
                         source: 'stolen',
                         createdAt: Math.floor(Date.now() / 1000)
                     });
+                    logger.info(`表情包已存入图库 (${rolled.toFixed(1)}% < ${p}%), 当前共${this.imagePool.stolenCount}张`);
+                } else {
+                    logger.info(`表情包未存入图库 (${rolled.toFixed(1)}% >= ${p}%)`);
                 }
             }
         } catch (error) {
