@@ -396,98 +396,7 @@ export class ToolManager {
         }
     }
 
-    static async handlePromptToolCall(ctx: seal.MsgContext, msg: seal.Message, ai: AI, tool_call_str: string): Promise<void> {
-        const { maxCallCount } = ConfigManager.tool;
 
-        ai.tool.toolCallCount++;
-        if (ai.tool.toolCallCount === maxCallCount) {
-            logger.warning('连续调用函数次数达到上限');
-        } else if (ai.tool.toolCallCount === maxCallCount + 1) {
-            logger.warning('连续调用函数次数超过上限');
-            await ai.context.addSystemUserMessage('调用函数返回', `连续调用函数次数超过上限`, []);
-            return;
-        } else if (ai.tool.toolCallCount > maxCallCount + 1) {
-            throw new Error('连续调用函数次数超过上限，已终止对话');
-        }
-
-        let tool_call: {
-            name: string,
-            arguments: {
-                [key: string]: any
-            }
-        } = null;
-
-        try {
-            tool_call = JSON.parse(tool_call_str);
-        } catch (e) {
-            const fixedStr = fixJsonString(tool_call_str);
-            if (fixedStr === '') {
-                logger.error('解析tool_call时出现错误:', e);
-                await ai.context.addSystemUserMessage('调用函数返回', `解析tool_call时出现错误:${e.message}`, []);
-                return;
-            }
-            try {
-                tool_call = JSON.parse(fixedStr);
-            } catch (e) {
-                logger.error('解析tool_call时出现错误:', e);
-                await ai.context.addSystemUserMessage('调用函数返回', `解析tool_call时出现错误:${e.message}`, []);
-                return;
-            }
-        }
-
-        if (!tool_call.hasOwnProperty('name') || !tool_call.hasOwnProperty('arguments')) {
-            logger.warning(`调用函数失败:缺少name或arguments`);
-            await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:缺少name或arguments`, []);
-            return;
-        }
-
-        const name = tool_call.name;
-        if (ConfigManager.tool.toolsNotAllow.includes(name)) {
-            logger.warning(`调用函数失败:禁止调用的函数:${name}`);
-            await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:禁止调用的函数:${name}`, []);
-            return;
-        }
-        if (!this.toolMap.hasOwnProperty(name)) {
-            logger.warning(`调用函数失败:未注册的函数:${name}`);
-            await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:未注册的函数:${name}`, []);
-            return;
-        }
-
-
-        const tool = this.toolMap[name];
-        if (tool.cmdInfo.ext !== '' && this.cmdArgs == null) {
-            logger.warning(`暂时无法调用函数，请先使用 .r 指令`);
-            await ai.context.addSystemUserMessage('调用函数返回', `暂时无法调用函数，请先提示用户使用 .r 指令`, []);
-            return;
-        }
-        if (tool.type !== "all" && tool.type !== msg.messageType) {
-            logger.warning(`调用函数失败:函数${name}可使用的场景类型为${tool.type}，当前场景类型为${msg.messageType}`);
-            await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:函数${name}可使用的场景类型为${tool.type}，当前场景类型为${msg.messageType}`, []);
-            return;
-        }
-
-        try {
-            const args = tool_call.arguments;
-            if (args !== null && typeof args !== 'object') {
-                logger.warning(`调用函数失败:arguement不是一个object`);
-                await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:arguement不是一个object`, []);
-                return;
-            }
-            for (const key of tool.info.function.parameters.required) {
-                if (!args.hasOwnProperty(key)) {
-                    logger.warning(`调用函数失败:缺少必需参数 ${key}`);
-                    await ai.context.addSystemUserMessage('调用函数返回', `调用函数失败:缺少必需参数 ${key}`, []);
-                    return;
-                }
-            }
-
-            const { content, images } = await tool.solve(ctx, msg, ai, args);
-            await ai.context.addSystemUserMessage('调用函数返回', content, images);
-        } catch (e) {
-            logger.error(`调用函数 (${name}:${JSON.stringify(tool_call.arguments, null, 2)}) 失败:${e.message}`);
-            await ai.context.addSystemUserMessage('调用函数返回', `调用函数 (${name}:${JSON.stringify(tool_call.arguments, null, 2)}) 失败:${e.message}`, []);
-        }
-    }
 
     reviveToolStauts() {
         const { toolsNotAllow, toolsDefaultClosed } = ConfigManager.tool;
@@ -534,24 +443,7 @@ export class ToolManager {
         }
     }
 
-    getToolsPrompt(ctx: seal.MsgContext): string {
-        const { toolsPromptTemplate } = ConfigManager.tool;
 
-        const tools = this.getToolsInfo(ctx.isPrivate ? 'private' : 'group');
-        if (tools && tools.length > 0) {
-            return tools.map((item, index) => {
-                return toolsPromptTemplate({
-                    "序号": index + 1,
-                    "函数名称": item.function.name,
-                    "函数描述": item.function.description,
-                    "参数信息": JSON.stringify(item.function.parameters.properties, null, 2),
-                    "必需参数": item.function.parameters.required.join('\n')
-                });
-            }).join('\n');
-        }
-
-        return '';
-    }
 }
 
 

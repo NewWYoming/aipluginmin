@@ -1,5 +1,5 @@
-export const VERSION = "4.12.0";
-export const AUTHOR = "baiyu&错误";
+export const VERSION = "5.0.0";
+export const AUTHOR = "baiyu&错误&NorthWyoming";
 export const NAME = "aiplugin4";
 
 export const CQTYPESALLOW = ["at", "image", "reply", "face", "poke"];

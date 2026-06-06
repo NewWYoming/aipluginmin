@@ -1,13 +1,15 @@
 import { Image, ImageManager } from "./image";
 import { ConfigManager } from "../config/configManager";
 import { replyToSender, revive, transformMsgId } from "../utils/utils";
-import { endStream, pollStream, sendChatRequest, startStream } from "../service";
+import { AIClient } from "../service/AIClient";
+import { ToolCallLoop } from "../service/ToolCallLoop";
+import { OpenAIMessage } from "../service/providers";
 import { Context } from "./context";
 import { MemoryManager } from "./memory";
-import { handleMessages, parseBody } from "../utils/utils_message";
+import { handleMessages } from "../utils/utils_message";
 import { ToolManager } from "../tool/tool";
 import { logger } from "../logger";
-import { checkRepeat, handleReply, MessageSegment, transformArrayToContent } from "../utils/utils_string";
+import { handleReply, MessageSegment, transformArrayToContent } from "../utils/utils_string";
 import { TimerManager } from "../timer";
 
 export interface GroupInfo {
@@ -61,12 +63,6 @@ export class AI {
     setting: Setting;
 
     // 下面是临时变量，用于处理消息
-    stream: { // 用于流式输出相关
-        id: string,
-        reply: string,
-        toolCallStatus: boolean
-    }
-
     bucket: { // 触发次数令牌桶
         count: number,
         lastTime: number
@@ -79,11 +75,6 @@ export class AI {
         this.memory = new MemoryManager();
         this.imageManager = new ImageManager();
         this.setting = new Setting();
-        this.stream = {
-            id: '',
-            reply: '',
-            toolCallStatus: false
-        }
         this.bucket = {
             count: 0,
             lastTime: 0
@@ -119,7 +110,7 @@ export class AI {
         }
     }
 
-    async chat(ctx: seal.MsgContext, msg: seal.Message, reason: string = '', tool_choice?: string): Promise<void> {
+    async chat(ctx: seal.MsgContext, msg: seal.Message, reason: string = ''): Promise<void> {
         logger.info('触发回复:', reason || '未知原因');
 
         if (reason !== '函数回调触发') {
@@ -147,209 +138,50 @@ export class AI {
         //清空数据
         this.resetState();
 
-        // 解析body，检查是否为流式
-        let stream = false;
-        try {
-            const bodyTemplate = ConfigManager.request.bodyTemplate;
-            const bodyObject = parseBody(bodyTemplate, [], null, null);
-            stream = bodyObject?.stream === true;
-        } catch (err) {
-            logger.error('解析body时出现错误:', err);
-            return;
-        }
-        if (stream) {
-            await this.chatStream(ctx, msg);
-            AIManager.saveAI(this.id);
-            return;
-        }
+        const { isTool } = ConfigManager.tool;
+        const requestConfig = ConfigManager.request;
 
+        const client = new AIClient({
+            apiProvider: requestConfig.apiProvider,
+            url: requestConfig.url,
+            apiKey: requestConfig.apiKey,
+            model: requestConfig.model,
+            maxTokens: requestConfig.maxTokens,
+            timeout: requestConfig.timeout,
+            thinkingEnabled: requestConfig.thinkingEnabled,
+            reasoningEffort: requestConfig.reasoningEffort,
+            toolThinkingEnabled: requestConfig.toolThinkingEnabled,
+            toolReasoningEffort: requestConfig.toolReasoningEffort,
+            temperature: requestConfig.temperature,
+            topP: requestConfig.topP,
+            extraBody: requestConfig.extraBody,
+        });
 
-        const { isTool, usePromptEngineering } = ConfigManager.tool;
-        const toolInfos = this.tool.getToolsInfo(msg.messageType);
+        const messages = await handleMessages(ctx, this) as OpenAIMessage[];
+        const tools = isTool ? this.tool.getToolsInfo(msg.messageType) : null;
 
-        let result = { contextArray: [], replyArray: [], images: [] };
-        const MaxRetry = 3;
-        for (let retry = 1; retry <= MaxRetry; retry++) {
-            // 处理messages
-            const messages = await handleMessages(ctx, this);
+        if (isTool && tools) {
+            const loop = new ToolCallLoop(client, requestConfig);
+            const result = await loop.run(ctx, msg, this, messages, tools);
 
-            //获取处理后的回复
-            const { content: raw_reply, tool_calls } = await sendChatRequest(messages, toolInfos, tool_choice || "auto");
-
-            // 转化为上下文、回复、图片数组
-            result = await handleReply(ctx, msg, this, raw_reply);
-
-            if (isTool) {
-                if (usePromptEngineering) {
-                    const match = raw_reply.match(/<[\|│｜]?function(?:_call)?>([\s\S]*)<\/function(?:_call)?>/);
-                    if (match) {
-                        logger.info(`触发工具调用`);
-                        // 先给他回复了再说
-                        const { contextArray, replyArray, images } = result;
-                        await this.reply(ctx, msg, contextArray, replyArray, images);
-
-                        await this.context.addMessage(ctx, msg, this, match[0], [], "assistant", '');
-                        try {
-                            await ToolManager.handlePromptToolCall(ctx, msg, this, match[1]);
-                            await this.chat(ctx, msg, '函数回调触发');
-                        } catch (e) {
-                            logger.error(`在handlePromptToolCall中出错:`, e.message);
-                        }
-                        return;
-                    }
-                } else {
-                    if (tool_calls.length > 0) {
-                        logger.info(`触发工具调用`);
-                        // 先给他回复了再说
-                        const { contextArray, replyArray, images } = result;
-                        await this.reply(ctx, msg, contextArray, replyArray, images);
-
-                        this.context.addToolCallsMessage(tool_calls);
-                        try {
-                            tool_choice = await ToolManager.handleToolCalls(ctx, msg, this, tool_calls);
-                            await this.chat(ctx, msg, '函数回调触发', tool_choice);
-                        } catch (e) {
-                            logger.error(`在handleToolCalls中出错:`, e.message);
-                        }
-                        return;
-                    }
-                }
+            if (result.content) {
+                const finalResponse = await client.chat(
+                    messages,
+                    null,
+                    'none',
+                    { enabled: requestConfig.thinkingEnabled, effort: requestConfig.reasoningEffort },
+                );
+                const replyText = finalResponse.content || result.content;
+                const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, replyText);
+                await this.reply(ctx, msg, contextArray, replyArray, images);
             }
-
-            // 检查是否为复读
-            if (checkRepeat(this.context, result.contextArray.join('')) && result.replyArray.join('').trim()) {
-                if (retry > MaxRetry) {
-                    logger.warning(`发现复读，已达到最大重试次数，清除AI上下文`);
-                    this.context.clearMessages('assistant', 'tool');
-                    break;
-                }
-
-                logger.warning(`发现复读，一秒后进行重试:[${retry}/3]`);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                continue;
-            }
-
-            break;
+        } else {
+            const response = await client.chat(messages, null, 'none');
+            const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, response.content);
+            await this.reply(ctx, msg, contextArray, replyArray, images);
         }
 
-        const { contextArray, replyArray, images } = result;
-        await this.reply(ctx, msg, contextArray, replyArray, images);
         AIManager.saveAI(this.id);
-    }
-
-    async chatStream(ctx: seal.MsgContext, msg: seal.Message): Promise<void> {
-        const { isTool, usePromptEngineering } = ConfigManager.tool;
-
-        await this.stopCurrentChatStream();
-
-        const messages = await handleMessages(ctx, this);
-        const id = await startStream(messages);
-        if (!id) return;
-
-        this.stream.id = id;
-        let status = 'processing';
-        let after = 0;
-        let interval = 1000;
-
-        while (status == 'processing' && this.stream.id === id) {
-            const result = await pollStream(this.stream.id, after);
-            status = result.status;
-            const raw_reply = result.reply;
-
-            if (raw_reply.length <= 8) interval = 1500;
-            else if (raw_reply.length <= 20) interval = 1000;
-            else if (raw_reply.length <= 30) interval = 500;
-            else interval = 200;
-
-            if (raw_reply.trim() === '') {
-                after = result.nextAfter;
-                await new Promise(resolve => setTimeout(resolve, interval));
-                continue;
-            }
-            logger.info("接收到的回复:", raw_reply);
-
-            if (isTool && usePromptEngineering) {
-                if (!this.stream.toolCallStatus && /<[\|│｜]?function(?:_call)?>/.test(this.stream.reply + raw_reply)) {
-                    logger.info("发现工具调用开始标签，拦截后续内容");
-
-                    // 对于function_call前面的内容，发送并添加到上下文中
-                    const match = raw_reply.match(/([\s\S]*)<[\|│｜]?function(?:_call)?>/);
-                    if (match && match[1].trim()) {
-                        const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, match[1]);
-                        if (this.stream.id !== id) return;
-                        await this.reply(ctx, msg, contextArray, replyArray, images);
-                    }
-                    this.stream.toolCallStatus = true;
-                }
-
-                if (this.stream.id !== id) return;
-
-                if (this.stream.toolCallStatus) {
-                    this.stream.reply += raw_reply;
-
-                    if (/<\/function(?:_call)?>/.test(this.stream.reply)) {
-                        logger.info("发现工具调用结束标签，开始处理对应工具调用");
-                        const match = this.stream.reply.match(/<[\|│｜]?function(?:_call)?>([\s\S]*)<\/function(?:_call)?>/);
-                        if (match) {
-                            this.stream.reply = '';
-                            this.stream.toolCallStatus = false;
-                            await this.stopCurrentChatStream();
-
-                            await this.context.addMessage(ctx, msg, this, match[0], [], "assistant", '');
-
-                            try {
-                                await ToolManager.handlePromptToolCall(ctx, msg, this, match[1]);
-                            } catch (e) {
-                                logger.error(`在handlePromptToolCall中出错：`, e.message);
-                                return;
-                            }
-
-                            await this.chatStream(ctx, msg);
-                            return;
-                        } else {
-                            logger.error('无法匹配到function_call');
-                            await this.stopCurrentChatStream();
-                        }
-                        return;
-                    } else {
-                        after = result.nextAfter;
-                        await new Promise(resolve => setTimeout(resolve, interval));
-                        continue;
-                    }
-                }
-            }
-
-            const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, raw_reply);
-            if (this.stream.id !== id) return;
-            this.reply(ctx, msg, contextArray, replyArray, images);
-
-            after = result.nextAfter;
-            await new Promise(resolve => setTimeout(resolve, interval));
-        }
-
-        if (this.stream.id !== id) {
-            return;
-        }
-
-        await this.stopCurrentChatStream();
-    }
-
-    async stopCurrentChatStream(): Promise<void> {
-        const { id, reply, toolCallStatus } = this.stream;
-        this.stream = {
-            id: '',
-            reply: '',
-            toolCallStatus: false
-        }
-        if (id) {
-            logger.info(`结束会话:`, id);
-            if (reply) {
-                if (toolCallStatus) { // 没有处理完的工具调用，在日志中显示
-                    logger.warning(`工具调用未处理完成:`, reply);
-                }
-            }
-            await endStream(id);
-        }
     }
 
     // 若不在活动时间范围内，返回-1

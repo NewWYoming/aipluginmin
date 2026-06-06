@@ -1,13 +1,12 @@
 import { AI, GroupInfo, UserInfo } from "../AI/AI";
 import { Message } from "../AI/context";
 import { ConfigManager } from "../config/configManager";
-import { ToolInfo } from "../tool/tool";
 import { fmtDate } from "./utils_string";
 import { knowledgeMM } from "../AI/memory";
 
 export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<Message> {
     const { systemMessageTemplate, isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;
-    const { isTool, usePromptEngineering } = ConfigManager.tool;
+    const { isTool } = ConfigManager.tool;
     const { localImagePathMap, receiveImage, condition } = ConfigManager.image;
     const { isMemory, isShortMemory } = ConfigManager.memory;
 
@@ -43,9 +42,6 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
     const memoryPrompt = isMemory ? await ai.memory.buildMemoryPrompt(ctx, ai.context, text, ui, gi) : '';
     // 短期记忆
     const shortMemoryPrompt = isShortMemory && ai.memory.useShortMemory ? ai.memory.shortMemoryList.map((item, index) => `${index + 1}. ${item}`).join('\n') : '';
-    // 调用函数
-    const toolsPrompt = isTool && usePromptEngineering ? ai.tool.getToolsPrompt(ctx) : '';
-
     const content = systemMessageTemplate({
         "角色设定": roleSetting,
         "平台": ctx.endPoint.platform,
@@ -66,9 +62,7 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
         "开启长期记忆": isMemory && memoryPrompt,
         "记忆信息": memoryPrompt,
         "开启短期记忆": isShortMemory && ai.memory.useShortMemory && shortMemoryPrompt,
-        "短期记忆信息": shortMemoryPrompt,
-        "开启工具函数提示词": isTool && usePromptEngineering,
-        "函数列表": toolsPrompt
+        "短期记忆信息": shortMemoryPrompt
     });
 
     const systemMessage: Message = {
@@ -218,76 +212,7 @@ export async function handleMessages(ctx: seal.MsgContext, ai: AI) {
     return processedMessages;
 }
 
-export function parseBody(template: string[], messages: any[], tools: ToolInfo[], tool_choice: string) {
-    const { isTool, usePromptEngineering } = ConfigManager.tool;
-    const bodyObject: any = {};
 
-    for (let i = 0; i < template.length; i++) {
-        const s = template[i];
-        if (s.trim() === '') {
-            continue;
-        }
-
-        try {
-            const obj = JSON.parse(`{${s}}`);
-            const key = Object.keys(obj)[0];
-            bodyObject[key] = obj[key];
-        } catch (err) {
-            throw new Error(`解析body的【${s}】时出现错误:${err}`);
-        }
-    }
-
-    if (!bodyObject.hasOwnProperty('messages')) {
-        bodyObject.messages = messages;
-    }
-
-    if (!bodyObject.hasOwnProperty('model')) {
-        throw new Error(`body中没有model`);
-    }
-
-    if (isTool && !usePromptEngineering) {
-        if (!bodyObject.hasOwnProperty('tools')) {
-            bodyObject.tools = tools;
-        }
-
-        if (!bodyObject.hasOwnProperty('tool_choice')) {
-            bodyObject.tool_choice = tool_choice;
-        }
-    } else {
-        delete bodyObject?.tools;
-        delete bodyObject?.tool_choice;
-    }
-
-    return bodyObject;
-}
-
-export function parseEmbeddingBody(template: string[], input: string, dimensions: number) {
-    const bodyObject: any = {};
-
-    for (let i = 0; i < template.length; i++) {
-        const s = template[i];
-        if (s.trim() === '') {
-            continue;
-        }
-
-        try {
-            const obj = JSON.parse(`{${s}}`);
-            const key = Object.keys(obj)[0];
-            bodyObject[key] = obj[key];
-        } catch (err) {
-            throw new Error(`解析body的【${s}】时出现错误:${err}`);
-        }
-    }
-
-    if (!bodyObject.hasOwnProperty('input')) {
-        bodyObject.input = input;
-    }
-    if (!bodyObject.hasOwnProperty('dimensions')) {
-        bodyObject.dimensions = dimensions;
-    }
-
-    return bodyObject;
-}
 
 export function buildContent(message: Message): string {
     const { isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;

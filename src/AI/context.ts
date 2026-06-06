@@ -18,6 +18,7 @@ export interface Message {
     role: string;
     tool_calls?: ToolCall[];
     tool_call_id?: string;
+    reasoning_content?: string;
 
     uid: string;
     name: string;
@@ -61,6 +62,7 @@ export class Context {
                 return msgInfo;
             }).filter(msgInfo => msgInfo);
 
+            message.reasoning_content = message.reasoning_content || '';
             message.images = message.images.map(image => revive(Image, image));
 
             return message;
