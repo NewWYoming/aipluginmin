@@ -11,6 +11,7 @@ import { ToolManager } from "../tool/tool";
 import { logger } from "../logger";
 import { handleReply, MessageSegment, transformArrayToContent } from "../utils/utils_string";
 import { TimerManager } from "../timer";
+import { ImagePool } from './ImagePool';
 
 export interface GroupInfo {
     isPrivate: false;
@@ -54,12 +55,13 @@ export class Setting {
 }
 
 export class AI {
-    static validKeys: (keyof AI)[] = ['context', 'tool', 'memory', 'imageManager', 'setting'];
+    static validKeys: (keyof AI)[] = ['context', 'tool', 'memory', 'imageManager', 'imagePool', 'setting'];
     id: string;
     context: Context;
     tool: ToolManager;
     memory: MemoryManager;
     imageManager: ImageManager;
+    imagePool: ImagePool;
     setting: Setting;
 
     // 下面是临时变量，用于处理消息
@@ -74,6 +76,7 @@ export class AI {
         this.tool = new ToolManager();
         this.memory = new MemoryManager();
         this.imageManager = new ImageManager();
+        this.imagePool = new ImagePool();
         this.setting = new Setting();
         this.bucket = {
             count: 0,
@@ -102,12 +105,7 @@ export class AI {
             await this.context.addMessage(ctx, msg, this, content, images, 'assistant', msgId);
         }
 
-        //发送偷来的图片
-        const { p } = ConfigManager.image;
-        if (Math.random() * 100 <= p) {
-            const img = await this.imageManager.drawImage();
-            if (img) seal.replyToSender(ctx, msg, img.CQCode);
-        }
+        // Image sending is now handled via ImagePool in image command
     }
 
     async chat(ctx: seal.MsgContext, msg: seal.Message, reason: string = ''): Promise<void> {
@@ -287,6 +285,9 @@ export class AIManager {
                     if (key === "imageManager") {
                         return revive(ImageManager, value);
                     }
+                    if (key === "imagePool") {
+                        return revive(ImagePool, value);
+                    }
                     if (key === "setting") {
                         return revive(Setting, value);
                     }
@@ -296,6 +297,29 @@ export class AIManager {
             } catch (error) {
                 logger.error(`从数据库中获取${`AI_${id}`}失败:`, error);
             }
+
+            // Migrate old stolenImages to ImagePool (one-time)
+            try {
+                const rawData = ConfigManager.ext.storageGet('AI_' + id);
+                if (rawData) {
+                    const raw = JSON.parse(rawData);
+                    if (raw.imageManager && raw.imageManager.stolenImages && raw.imageManager.stolenImages.length > 0) {
+                        if (!ai.imagePool) ai.imagePool = new ImagePool();
+                        for (const img of raw.imageManager.stolenImages) {
+                            if (img.file && img.id) {
+                                ai.imagePool.add({
+                                    id: img.id,
+                                    file: img.file,
+                                    description: img.content || '用户发送的图片',
+                                    source: 'stolen',
+                                    createdAt: Math.floor(Date.now() / 1000)
+                                });
+                            }
+                        }
+                        AIManager.saveAI(id);
+                    }
+                }
+            } catch { /* migration is best-effort */ }
 
             ai.id = id;
             this.cache[id] = ai;
