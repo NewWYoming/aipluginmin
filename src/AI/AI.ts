@@ -63,6 +63,7 @@ export class AI {
     imageManager: ImageManager;
     imagePool: ImagePool;
     setting: Setting;
+    isChatting: boolean;
 
     // 下面是临时变量，用于处理消息
     bucket: { // 触发次数令牌桶
@@ -82,6 +83,7 @@ export class AI {
             count: 0,
             lastTime: 0
         }
+        this.isChatting = false;
     }
 
     resetState() {
@@ -109,8 +111,14 @@ export class AI {
     }
 
     async chat(ctx: seal.MsgContext, msg: seal.Message, reason: string = ''): Promise<void> {
+        if (this.isChatting) {
+            logger.info('跳过重复触发: 已有回复在进行中');
+            return;
+        }
+        this.isChatting = true;
         logger.info('触发回复:', reason || '未知原因');
 
+        try {
         if (reason !== '函数回调触发') {
             const { bucketLimit, fillInterval } = ConfigManager.received;
             // 补充并检查触发次数
@@ -180,7 +188,12 @@ export class AI {
         }
 
         AIManager.saveAI(this.id);
+    } catch (e) {
+        logger.error('chat() 异常:', e?.message || e);
+    } finally {
+        this.isChatting = false;
     }
+}
 
     // 若不在活动时间范围内，返回-1
     get curActiveTimeSegIndex(): number {
