@@ -12,4 +12,5 @@ yarn.lock
 package-lock.json
 .dev/
 dist/
+dist-backups/
 dev/
