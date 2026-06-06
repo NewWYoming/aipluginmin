@@ -155,7 +155,14 @@ export function registerImage() {
         }
         if (list.length === 0) return { content: kw ? '[没有匹配"' + kw + '"的图片]' : '[图库为空]', images: [] };
         const text = list
-            .map((e, i) => (i + 1) + '. [' + e.source + '] ' + e.description + ' (id:' + e.id + ')')
+            .map((e, i) => {
+                // Clean description: trim raw JSON artifacts from old migrated data
+                let desc = e.description;
+                const m = desc.match(/text2[:：]\s*(.+?)(?:[}；]|$)/);
+                if (m) desc = m[1].trim();
+                if (desc.length > 80) desc = desc.slice(0, 80) + '...';
+                return (i + 1) + '. [' + e.source + '] ' + desc + ' (id:' + e.id + ')';
+            })
             .join('\n');
         return { content: text, images: [] };
     };

@@ -73,7 +73,7 @@ export class ToolCallLoop {
       }
 
       // 将 assistant message（含 reasoning_content + tool_calls）追加到 context 和 API messages
-      ai.context.addToolCallsMessage(response.tool_calls);
+      ai.context.addToolCallsMessage(response.tool_calls, response.reasoning_content);
 
       const assistantMsg: OpenAIMessage = {
         role: 'assistant',
