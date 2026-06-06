@@ -20,7 +20,6 @@ import { registerContext } from "./tool_context"
 import { registerQQList } from "./tool_qq_list"
 import { registerSetTrigger } from "./tool_trigger"
 import { registerMusicPlay } from "./tool_music"
-import { registerMeme } from "./tool_meme"
 import { registerRender } from "./tool_render"
 import { logger } from "../logger"
 import { Image } from "../AI/image";
@@ -205,7 +204,6 @@ export class ToolManager {
         registerQQList();
         registerSetTrigger();
         registerMusicPlay();
-        registerMeme();
         registerRender();
     }
 
