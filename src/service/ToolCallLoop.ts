@@ -62,7 +62,12 @@ export class ToolCallLoop {
       }
 
       tool_calls_occurred = true;
-      this.callCount += response.tool_calls.length;
+
+      // 图片查询/发送不计入工具调用上限，避免因关键词搜索/链接过期浪费配额
+      const isImageTool = (tc: any) => tc?.function?.name === 'list_images' || tc?.function?.name === 'send_image';
+      const imageCalls = response.tool_calls.filter(isImageTool).length;
+      const actionCalls = response.tool_calls.length - imageCalls;
+      this.callCount += actionCalls;
 
       // 上限保护
       if (this.callCount >= this.maxCallCount) {

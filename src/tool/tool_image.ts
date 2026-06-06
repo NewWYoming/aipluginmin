@@ -133,13 +133,13 @@ export function registerImage() {
         type: 'function',
         function: {
             name: 'list_images',
-            description: '列出图库中所有可发送的图片及其描述。用于了解有哪些表情包可用，然后调用 send_image 按 id 精确发送。',
+            description: '列出图库中所有可发送的图片及其描述。不传 keyword 查看全部图片；传 keyword 则按关键词过滤。用于了解有哪些表情包可用，然后调用 send_image 按 id 精确发送。',
             parameters: {
                 type: 'object',
                 properties: {
                     keyword: {
                         type: 'string',
-                        description: '可选，按关键词过滤描述，如"猫"只显示描述中含有猫的图片'
+                        description: '可选，按关键词过滤描述。建议先不传 keyword 查看全部图片，再挑一张发送'
                     }
                 },
                 required: []
