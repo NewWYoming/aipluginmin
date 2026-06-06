@@ -63,11 +63,7 @@ export class ToolCallLoop {
 
       tool_calls_occurred = true;
 
-      // send_image 不计入工具调用上限（链接过期可能需重试）
-      const isImageTool = (tc: any) => tc?.function?.name === 'send_image';
-      const imageCalls = response.tool_calls.filter(isImageTool).length;
-      const actionCalls = response.tool_calls.length - imageCalls;
-      this.callCount += actionCalls;
+      this.callCount += response.tool_calls.length;
 
       // 上限保护
       if (this.callCount >= this.maxCallCount) {
