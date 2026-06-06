@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         AI楠板4
 // @author       閿欒銆佺櫧楸笺€丯orthWyoming
-// @version      5.0.16
+// @version      5.0.17
 // @description  閫傜敤浜庡ぇ閮ㄥ垎OpenAI API鍏煎鏍煎紡AI鐨勬ā鍨嬫彃浠讹紝娴嬭瘯鐜锟?Deepseek AI (https://platform.deepseek.com/)锛岀敤浜庝笌 AI 杩涜瀵硅瘽锛屽苟鏍规嵁鐗瑰畾鍏抽敭璇嶈Е鍙戝洖澶嶃€備娇锟?ai help鏌ョ湅浣跨敤鏂规硶銆傚叿浣撻厤缃煡鐪嬫彃浠堕厤缃」銆俓nopenai鏍囧噯涓嬬殑function calling鍔熻兘宸茶繘琛岄€傞厤锛岄€夌敤妯″瀷鑻ヤ笉鏀寔璇ュ姛鑳斤紝鍙互寮€鍚縼绉诲埌鎻愮ず璇嶅伐绋嬬殑寮€鍏筹紝鍗冲彲浣跨敤璋冪敤鍑芥暟鍔熻兘銆俓n浜ゆ祦绛旂枒QQ缇わ細143412516
 // @timestamp    1733387279
 // 2024-12-05 16:27:59

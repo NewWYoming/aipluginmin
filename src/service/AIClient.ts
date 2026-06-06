@@ -7,6 +7,7 @@ import { withTimeout } from '../utils/utils';
 export class AIClient {
   private config: AIClientConfig;
   private provider: ChatProvider;
+  private lastLogLen = 0;
 
   constructor(config: AIClientConfig) {
     this.config = config;
@@ -60,15 +61,23 @@ export class AIClient {
 
   /** 底层 HTTP POST */
   private async fetchChat(url: string, apiKey: string, body: any): Promise<any> {
-    // 打印上下文（过滤 system）
+    // 打印上下文：首次全量，后续只打本次新增的消息
     if (body.messages) {
-      const s = JSON.stringify(body.messages, (_key: string, value: any) => {
-        if (_key === '' && Array.isArray(value)) {
-          return value.filter((item: any) => item.role !== 'system');
-        }
-        return value;
-      });
-      logger.info(`请求发送前的上下文:\n`, s);
+      const msgs: any[] = body.messages;
+      const newFrom = this.lastLogLen;
+      if (newFrom === 0 || msgs.length <= newFrom) {
+        // First request or no new messages: log full context (filter system)
+        const s = JSON.stringify(msgs, (_key: string, value: any) => {
+          if (_key === '' && Array.isArray(value)) return value.filter((item: any) => item.role !== 'system');
+          return value;
+        });
+        logger.info(`请求发送前的上下文:\n`, s);
+      } else {
+        // Subsequent requests (tool call iteration): log only new messages
+        const delta = msgs.slice(newFrom);
+        logger.info(`请求发送前的上下文(新增${delta.length}条):\n`, JSON.stringify(delta));
+      }
+      this.lastLogLen = msgs.length;
     }
 
     const headers: Record<string, string> = {
