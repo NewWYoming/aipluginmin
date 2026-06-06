@@ -15,6 +15,20 @@ npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
 - esbuild prepends `header.txt` (UserScript metadata) to the output.
 - Build marks `csharp` and `puerts` as external — these exist in the SeaDice host runtime.
 
+### Before every build
+
+1. **Backup old dist file** — copy `dist/aiplugin4.js` to `dist/aiplugin4-v{old-version}.js` before overwriting.
+2. If `dist/` doesn't exist yet on a fresh clone, skip the backup.
+
+## Version bumping
+
+**Every commit that modifies `src/` must bump the patch version (X.Y.Z → X.Y.Z+1).** Version lives in two places:
+
+- `src/config/config.ts` → `VERSION` constant
+- `header.txt` → `@version` field
+
+Bump both before committing. Do not bump for docs-only or AGENTS.md-only changes.
+
 ## SeaDice API
 
 - **`types/seal.d.ts`** declares the SeaDice runtime types (provided globally, no import needed). The file is **incomplete**.
