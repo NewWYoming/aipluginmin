@@ -3,8 +3,8 @@ import { AI, AIManager, GroupInfo, SessionInfo, UserInfo } from "./AI";
 import { Context } from "./context";
 import { cosineSimilarity, generateId, getCommonGroup, getCommonKeyword, getCommonUser, revive } from "../utils/utils";
 import { logger } from "../logger";
-import { fetchData, getEmbedding } from "../service";
-import { buildContent, getRoleSetting, parseBody } from "../utils/utils_message";
+import { fetchData, getEmbedding } from "../service/legacy";
+import { buildContent, getRoleSetting } from "../utils/utils_message";
 import { ToolManager } from "../tool/tool";
 import { fmtDate } from "../utils/utils_string";
 import { Image, ImageManager } from "./image";
@@ -339,7 +339,17 @@ export class MemoryManager {
                     content: prompt
                 }
             ]
-            const bodyObject = parseBody(memoryBodyTemplate, messages, [], "none");
+            const bodyObject: any = {};
+            for (const s of memoryBodyTemplate) {
+              if (!s.trim()) continue;
+              try {
+                const obj = JSON.parse(`{${s}}`);
+                Object.assign(bodyObject, obj);
+              } catch { /* ignore parse errors */ }
+            }
+            bodyObject.messages = messages;
+            bodyObject.tool_choice = 'none';
+            if (!bodyObject.model) throw new Error('body中没有model');
 
             const time = Date.now();
             const data = await fetchData(url, apiKey, bodyObject);

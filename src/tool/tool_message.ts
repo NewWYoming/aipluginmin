@@ -3,7 +3,7 @@ import { ConfigManager } from "../config/configManager";
 import { replyToSender, transformMsgIdBack } from "../utils/utils";
 import { getCtxAndMsg } from "../utils/utils_seal";
 import { handleReply, MessageSegment, parseSpecialTokens, transformArrayToContent } from "../utils/utils_string";
-import { Tool, ToolManager } from "./tool";
+import { Tool, ToolCall, ToolManager } from "./tool";
 import { CQTYPESALLOW, faceMap } from "../config/config";
 import { deleteMsg, getGroupMemberInfo, getMsg, sendGroupForwardMsg, sendPrivateForwardMsg, netExists } from "../utils/utils_ob11";
 import { logger } from "../logger";
@@ -98,7 +98,23 @@ export function registerMessage() {
             await ai.context.addMessage(ctx, msg, ai, content, images, 'assistant', msgId);
         }
 
-        if (tool_call) await ToolManager.handlePromptToolCall(ctx, msg, ai, tool_call);
+        if (tool_call) {
+          try {
+            const tc = typeof tool_call === 'string' ? JSON.parse(tool_call) : tool_call;
+            const fakeToolCall: ToolCall = {
+              index: 0,
+              id: 'send_msg_' + Date.now(),
+              type: 'function',
+              function: {
+                name: tc.name,
+                arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments),
+              },
+            };
+            await ToolManager.handleToolCall(ctx, msg, ai, fakeToolCall);
+          } catch (e) {
+            await ai.context.addSystemUserMessage('调用函数返回', `send_msg 工具调用失败: ${e.message}`, []);
+          }
+        }
 
         AIManager.saveAI(ai.id);
         return { content: "消息发送成功", images: [] };

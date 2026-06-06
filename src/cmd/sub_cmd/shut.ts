@@ -7,15 +7,9 @@ export function registerCmdShut() {
     cmd.help = '';
     cmd.priv = { priv: U };
     cmd.solve = async (scc: SubCmdContext) => {
-        const { ctx, msg, ai, ret } = scc;
+        const { ctx, msg, ret } = scc;
 
-        if (ai.stream.id === '') {
-            seal.replyToSender(ctx, msg, '当前没有正在进行的对话');
-            return ret;
-        }
-
-        await ai.stopCurrentChatStream()
-        seal.replyToSender(ctx, msg, '已停止当前对话');
+        seal.replyToSender(ctx, msg, '当前版本不支持流式输出');
         return ret;
     }
 }
