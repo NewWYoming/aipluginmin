@@ -137,6 +137,25 @@ export function getCommonGroup(a: GroupInfo[], b: GroupInfo[]): GroupInfo[] {
     const aid = new Set(a.map(g => g.id));
     return b.filter(g => aid.has(g.id));
 }
+export function levenshteinDistance(a: string, b: string): number {
+    const m = a.length, n = b.length;
+    const dp: number[][] = [];
+    for (let i = 0; i <= m; i++) {
+        dp[i] = [i];
+    }
+    for (let j = 0; j <= n; j++) {
+        dp[0][j] = j;
+    }
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : Math.min(dp[i - 1][j - 1], dp[i][j - 1], dp[i - 1][j]) + 1;
+        }
+    }
+    return dp[m][n];
+}
+
 export function getCommonKeyword(a: string[], b: string[]): string[] {
     if (a.length === 0 || b.length === 0) return [];
     const aid = new Set(a);
