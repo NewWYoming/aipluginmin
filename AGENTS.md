@@ -17,8 +17,8 @@ npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
 
 ### Before every build
 
-1. **Backup old dist file** — copy `dist/aiplugin4.js` to `dist/aiplugin4-v{old-version}.js` before overwriting.
-2. If `dist/` doesn't exist yet on a fresh clone, skip the backup.
+1. **Backup old dist file** — `tools/build.js` auto-copies `dist/aiplugin4.js` to `dist-backups/aiplugin4-v{old-version}.js` before overwriting.
+2. The backup is automatic; `dist-backups/` can be gitignored.
 
 ## Version bumping
 
