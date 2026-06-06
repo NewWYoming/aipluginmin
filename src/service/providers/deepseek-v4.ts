@@ -29,8 +29,12 @@ export class DeepSeekV4Provider extends ChatProvider {
         const msg: any = { role: m.role, content: m.content };
         if (m.tool_calls) msg.tool_calls = m.tool_calls;
         if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-        // DeepSeek: 必须回传 reasoning_content（工具调用回合）
-        if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
+        // DeepSeek thinking 模式下必须回传 reasoning_content
+        if (thinking.enabled && m.role === 'assistant') {
+          msg.reasoning_content = m.reasoning_content || '';
+        } else if (m.reasoning_content) {
+          msg.reasoning_content = m.reasoning_content;
+        }
         return msg;
       }),
       max_tokens: config.maxTokens,

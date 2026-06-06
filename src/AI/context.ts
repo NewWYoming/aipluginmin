@@ -162,10 +162,11 @@ export class Context {
         this.limitMessages();
     }
 
-    async addToolCallsMessage(tool_calls: ToolCall[]) {
+    async addToolCallsMessage(tool_calls: ToolCall[], reasoningContent: string = '') {
         const message: Message = {
             role: 'assistant',
             tool_calls: tool_calls,
+            reasoning_content: reasoningContent || undefined,
             uid: '',
             name: '',
             images: [],
