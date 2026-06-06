@@ -15,7 +15,19 @@ const configAll = require('./build-config');
     }
 
     const timerStart = Date.now();
-    fs.rmSync(path.dirname(config.outfile), { recursive: true, force: true });
+    // Backup old dist file before deleting (stored outside dist/ to survive rmSync)
+    const distDir = path.dirname(config.outfile);
+    const backupDir = path.join(path.dirname(distDir), 'dist-backups');
+    if (fs.existsSync(config.outfile)) {
+      const oldContent = fs.readFileSync(config.outfile, 'utf-8');
+      const versionMatch = oldContent.match(/@version\s+(\S+)/);
+      if (versionMatch && versionMatch[1]) {
+        const oldVer = versionMatch[1];
+        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+        fs.copyFileSync(config.outfile, path.join(backupDir, `aiplugin4-v${oldVer}.js`));
+      }
+    }
+    fs.rmSync(distDir, { recursive: true, force: true });
     // fse.copySync("./assets", path.join(path.dirname(config.outfile), "assets"), { overwrite: true });
     // fs.copyFileSync("./index.html", path.join(path.dirname(config.outfile), "index.html"));
     // fs.copyFileSync(buildEvn == "production" ? "./index.html" : "./indexDebug.html", path.join(path.dirname(config.outfile), "index.html"));
