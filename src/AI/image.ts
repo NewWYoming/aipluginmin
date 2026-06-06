@@ -207,27 +207,13 @@ ${img.CQCode}`;
             if (fmtCondition === 1) await image.imageToText();
 
             // Parse JSON result from imageToText (new JSON prompt)
-            // Model may return array, nested object, or different key names — normalize
             let text1 = '', text2 = image.content, isEmoji = false;
             if (image.content) {
                 try {
-                    let parsed = JSON.parse(image.content);
-                    // Unwrap array response: ["{...}"] or [{...}]
-                    if (Array.isArray(parsed)) {
-                        parsed = parsed[0];
-                        if (!parsed) throw new Error('empty array');
-                    }
-                    // If still a string (model double-wrapped JSON), parse again
-                    if (typeof parsed === 'string') {
-                        try { parsed = JSON.parse(parsed); } catch { /* not JSON string */ }
-                    }
-                    // Normalize: try both flat and nested formats
-                    const obj: any = parsed;
-                    if (obj) {
-                        text1 = obj.text1 || obj.ocr_text || (obj.image_content?.ocr_text) || '';
-                        text2 = obj.text2 || obj.description || (obj.image_content?.description) || image.content;
-                        isEmoji = obj.isEmoji === true || obj.is_emoji === true || (obj.image_content?.is_emoji) === true;
-                    }
+                    const parsed = JSON.parse(image.content);
+                    text1 = parsed.text1 || '';
+                    text2 = parsed.text2 || image.content;
+                    isEmoji = parsed.isEmoji === true;
                 } catch {
                     // Old format or non-JSON response: treat whole content as text2
                     text2 = image.content;
