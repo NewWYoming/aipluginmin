@@ -38,17 +38,17 @@ export class ToolCallLoop {
         return { content: '', images: [], tool_calls_occurred };
       }
 
-      // 工具阶段：轻思考
-      const toolThinking: ThinkingConfig = {
-        enabled: this.config.toolThinkingEnabled,
-        effort: this.config.toolReasoningEffort,
+      // DeepSeek supports thinking + tool calls simultaneously
+      const thinking: ThinkingConfig = {
+        enabled: this.config.thinkingEnabled,
+        effort: this.config.reasoningEffort,
       };
 
       // 每次带上当前 tools + 上限控制 tool_choice
       const tool_choice = this.callCount >= this.maxCallCount ? 'none' : 'auto';
       const toolInfos = tools && tools.length > 0 ? tools : null;
 
-      const response = await this.client.chat(messages, toolInfos, tool_choice, toolThinking);
+      const response = await this.client.chat(messages, toolInfos, tool_choice, thinking);
 
       if (this.signal?.aborted) {
         logger.info('ToolCallLoop 在回复后被取消');
