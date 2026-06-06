@@ -76,8 +76,9 @@ export class AI {
         this.context = new Context();
         this.tool = new ToolManager();
         this.memory = new MemoryManager();
-        this.imageManager = new ImageManager();
         this.imagePool = new ImagePool();
+        this.imageManager = new ImageManager();
+        this.imageManager.imagePool = this.imagePool; // 共享同一个池
         this.setting = new Setting();
         this.bucket = {
             count: 0,
@@ -309,6 +310,11 @@ export class AIManager {
                 });
             } catch (error) {
                 logger.error(`从数据库中获取${`AI_${id}`}失败:`, error);
+            }
+
+            // 确保 imageManager 和 imagePool 共享同一个实例
+            if (ai.imagePool && ai.imageManager) {
+                ai.imageManager.imagePool = ai.imagePool;
             }
 
             // Migrate old stolenImages to ImagePool (one-time)
