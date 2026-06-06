@@ -7,13 +7,8 @@ import { knowledgeMM } from "../AI/memory";
 export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<Message> {
     const { systemMessageTemplate, isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;
     const { isTool } = ConfigManager.tool;
-    const { localImagePathMap, receiveImage, condition } = ConfigManager.image;
+    const { receiveImage, condition } = ConfigManager.image;
     const { isMemory, isShortMemory } = ConfigManager.memory;
-
-    // 可发送的图片提示
-    const sandableImagesPrompt: string = Object.keys(localImagePathMap)
-        .map((id, index) => `${index + 1}. ${id}`)
-        .join('\n');
 
     // 角色设定
     const { roleIndex, roleSetting } = getRoleSetting(ctx);
@@ -56,8 +51,6 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
         "展示时间": showTime,
         "接收图片": receiveImage,
         "图片条件不为零": condition !== '0',
-        "可发送图片不为空": sandableImagesPrompt,
-        "可发送图片列表": sandableImagesPrompt,
         "知识库": knowledgePrompt,
         "开启长期记忆": isMemory && memoryPrompt,
         "记忆信息": memoryPrompt,
