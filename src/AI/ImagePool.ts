@@ -23,8 +23,12 @@ export class ImagePool {
 
   add(entry: ImageEntry): void {
     // Avoid duplicate entries by file
-    if (this.images.some(img => img.file === entry.file && img.source === entry.source)) return;
+    if (this.images.some(img => img.file === entry.file && img.source === entry.source)) {
+      logger.info('ImagePool.add 重复跳过: ' + entry.file.slice(0, 60) + '...');
+      return;
+    }
     this.images.push(entry);
+    logger.info('ImagePool.add 已插入: ' + entry.description.slice(0, 40) + ' | 池中共' + this.images.length + '张(stolen:' + this.stolenCount + ', local:' + this.localCount + ') | 上限' + ConfigManager.image.maxStolenImageNum);
     this.limit();
   }
 
