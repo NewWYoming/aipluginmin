@@ -129,32 +129,73 @@ export function registerImage() {
         }
     }
 
+    const toolListImages = new Tool({
+        type: 'function',
+        function: {
+            name: 'list_images',
+            description: '列出图库中所有可发送的图片及其描述。用于了解有哪些表情包可用，然后调用 send_image 按 id 精确发送。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    keyword: {
+                        type: 'string',
+                        description: '可选，按关键词过滤描述，如"猫"只显示描述中含有猫的图片'
+                    }
+                },
+                required: []
+            }
+        }
+    });
+    toolListImages.solve = async (ctx, msg, ai, args) => {
+        ai.imagePool.loadLocalImages();
+        const kw = (args.keyword || '').trim();
+        let list = ai.imagePool.images;
+        if (kw) {
+            list = list.filter(e => e.description.includes(kw));
+        }
+        if (list.length === 0) return { content: kw ? '[没有匹配"' + kw + '"的图片]' : '[图库为空]', images: [] };
+        const text = list
+            .map((e, i) => (i + 1) + '. [' + e.source + '] ' + e.description + ' (id:' + e.id + ')')
+            .join('\n');
+        return { content: text, images: [] };
+    };
+
     const toolSendImage = new Tool({
         type: 'function',
         function: {
             name: 'send_image',
-            description: '发送一张图片或表情包。根据描述从图库中匹配最合适的图片。当需要表达情绪、玩梗或配图时使用。',
+            description: '发送一张图片或表情包。可先用 list_images 查看图片 id，再传入 id 精确发送；或传入 description 从图库模糊匹配。',
             parameters: {
                 type: 'object',
                 properties: {
+                    id: {
+                        type: 'string',
+                        description: '图片 id（来自 list_images 返回结果），精确匹配'
+                    },
                     description: {
                         type: 'string',
-                        description: '图片描述，如"开心的猫"、"疑惑"、"拍桌大笑"'
+                        description: '图片描述，如"开心的猫"、"疑惑"、"拍桌大笑"（与 id 二选一，优先使用 id）'
                     }
                 },
-                required: ['description']
+                required: []
             }
         }
     });
     toolSendImage.solve = async (ctx, msg, ai, args) => {
-        const desc = args.description;
-        if (!desc) return { content: '[send_image] 缺少描述参数', images: [] };
+        const { id, description: desc } = args;
 
-        // Load local images into pool (idempotent)
         ai.imagePool.loadLocalImages();
 
-        const entry = ai.imagePool.search(desc);
-        if (!entry) return { content: '[未找到匹配"' + desc + '"的图片]', images: [] };
+        let entry;
+        if (id) {
+            entry = ai.imagePool.images.find(e => e.id === id);
+            if (!entry) return { content: '[未找到图片 id:' + id + ']', images: [] };
+        } else if (desc) {
+            entry = ai.imagePool.search(desc);
+            if (!entry) return { content: '[未找到匹配"' + desc + '"的图片，可用 list_images 查看可用图片]', images: [] };
+        } else {
+            return { content: '[send_image] 至少需要 id 或 description 参数', images: [] };
+        }
 
         // Validate stolen image URLs
         if (entry.source === 'stolen') {
@@ -162,13 +203,7 @@ export function registerImage() {
             img.file = entry.file;
             if (!await img.checkImageUrl()) {
                 ai.imagePool.remove(entry.id);
-                // Retry once after removing expired
-                const retry = ai.imagePool.search(desc);
-                if (retry) {
-                    seal.replyToSender(ctx, msg, '[CQ:image,file=' + retry.file + ']');
-                    return { content: '', images: [] };
-                }
-                return { content: '[匹配的图片链接已过期]', images: [] };
+                return { content: '[图片链接已过期，已清理]', images: [] };
             }
         }
 
