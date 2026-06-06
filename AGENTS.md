@@ -29,6 +29,19 @@ npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
 
 Bump both before committing. Do not bump for docs-only or AGENTS.md-only changes.
 
+**⚠️ Use the `edit` tool to bump versions. Never use PowerShell `Set-Content` or `(Get-Content).replace()` — they destroy UTF-8 encoding of Chinese characters.** `header.txt` and `config.ts` contain Chinese text that will garble irreversibly with PowerShell pipes.
+
+## Workflow for changes
+
+**Non-trivial changes must follow: brainstorm → design → plan → implement.** Do not jump directly to code edits for features, refactors, or structural changes.
+
+1. **Brainstorm** — load `brainstorming` skill, explore context, ask questions, propose approaches, get user approval
+2. **Design doc** — write to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+3. **Implementation plan** — load `writing-plans` skill, write to `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md`
+4. **Implement** — execute plan with `subagent-driven-development` (preferred) or `executing-plans`
+
+Exceptions: trivial bugfixes (<10 lines, single file), config default changes, log line additions, version bumps themselves.
+
 ## SeaDice API
 
 - **`types/seal.d.ts`** declares the SeaDice runtime types (provided globally, no import needed). The file is **incomplete**.
