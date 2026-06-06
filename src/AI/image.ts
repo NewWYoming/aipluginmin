@@ -4,6 +4,7 @@ import { generateId } from "../utils/utils";
 import { logger } from "../logger";
 import { AI } from "./AI";
 import { MessageSegment, parseSpecialTokens } from "../utils/utils_string";
+import { ImagePool, ImageEntry } from './ImagePool';
 
 export class Image {
     static validKeys: (keyof Image)[] = ['id', 'file', 'content'];
@@ -145,13 +146,11 @@ export class Image {
 }
 
 export class ImageManager {
-    static validKeys: (keyof ImageManager)[] = ['stolenImages', 'stealStatus'];
-    stolenImages: Image[];
-    stealStatus: boolean;
+    static validKeys: (keyof ImageManager)[] = ['imagePool'];
+    imagePool: ImagePool;
 
     constructor() {
-        this.stolenImages = [];
-        this.stealStatus = false;
+        this.imagePool = new ImagePool();
     }
 
     static getUserAvatar(uid: string): Image {
@@ -166,11 +165,6 @@ export class ImageManager {
         img.id = `group_avatar:${gid}`;
         img.file = `https://p.qlogo.cn/gh/${gid.replace(/^.+:/, '')}/${gid.replace(/^.+:/, '')}/640`;
         return img;
-    }
-
-    stealImages(images: Image[]) {
-        const { maxStolenImageNum } = ConfigManager.image;
-        this.stolenImages = this.stolenImages.concat(images).slice(-maxStolenImageNum);
     }
 
     static getLocalImageListText(p: number = 1): string {
@@ -188,40 +182,6 @@ export class ImageManager {
                 return `${i + 1 + (p - 1) * 5}. 名称:${img.id}
 ${img.CQCode}`;
             }).join('\n') + `\n当前页码:${p}/${Math.ceil(images.length / 5)}`;
-    }
-
-    async drawStolenImage(): Promise<Image> {
-        if (this.stolenImages.length === 0) return null;
-        const index = Math.floor(Math.random() * this.stolenImages.length);
-        const img = this.stolenImages.splice(index, 1)[0];
-        if (!await img.checkImageUrl()) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            return await this.drawStolenImage();
-        }
-        return img;
-    }
-
-    getStolenImageListText(p: number = 1): string {
-        if (this.stolenImages.length == 0) return '';
-        if (p > Math.ceil(this.stolenImages.length / 5)) p = Math.ceil(this.stolenImages.length / 5);
-        return this.stolenImages.slice((p - 1) * 5, p * 5)
-            .map((img, i) => {
-                return `${i + 1 + (p - 1) * 5}. ID:${img.id}
-${img.CQCode}`;
-            }).join('\n') + `\n当前页码:${p}/${Math.ceil(this.stolenImages.length / 5)}`;
-    }
-
-    async drawImage(): Promise<Image> {
-        const { localImagePathMap } = ConfigManager.image;
-        const localImages = Object.keys(localImagePathMap).map(id => {
-            const image = new Image();
-            image.id = id;
-            image.file = localImagePathMap[id];
-            return image;
-        });
-        if (this.stolenImages.length == 0 && localImages.length == 0) return null;
-        const index = Math.floor(Math.random() * (localImages.length + this.stolenImages.length));
-        return index < localImages.length ? localImages[index] : await this.drawStolenImage();
     }
 
     /**
@@ -246,13 +206,40 @@ ${img.CQCode}`;
             const fmtCondition = parseInt(seal.format(ctx, `{${condition}}`));
             if (fmtCondition === 1) await image.imageToText();
 
-            content += image.content ? `<|img:${image.id}:${image.content}|>` : `<|img:${image.id}|>`;
+            // Parse JSON result from imageToText (new JSON prompt)
+            let text1 = '', text2 = image.content, isEmoji = false;
+            if (image.content) {
+                try {
+                    const parsed = JSON.parse(image.content);
+                    text1 = parsed.text1 || '';
+                    text2 = parsed.text2 || image.content;
+                    isEmoji = parsed.isEmoji === true;
+                } catch {
+                    // Old format or non-JSON response: treat whole content as text2
+                    text2 = image.content;
+                }
+            }
+
+            content += text2 ? `<|img:${image.id}:${text2}|>` : `<|img:${image.id}|>`;
             images.push(image);
+
+            // Auto-steal: if emoji and probability hits → store in ImagePool
+            if (isEmoji) {
+                const { p } = ConfigManager.image;
+                if (Math.random() * 100 < p) {
+                    this.imagePool.add({
+                        id: image.id,
+                        file: image.file,
+                        description: text2 || '表情包',
+                        source: 'stolen',
+                        createdAt: Math.floor(Date.now() / 1000)
+                    });
+                }
+            }
         } catch (error) {
             logger.error('在handleImageMessage中处理图片时出错:', error);
         }
 
-        if (this.stealStatus) this.stealImages(images);
         return { content, images };
     }
 
