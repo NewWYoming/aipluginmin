@@ -1,4 +1,4 @@
-# 🎲 AI骰娘4 - SealDice AI插件
+# 🎲 AI骰娘 - SealDice AI插件
 
 - 让你的骰娘活起来
 
