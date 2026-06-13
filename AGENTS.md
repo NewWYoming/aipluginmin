@@ -76,3 +76,14 @@ src/utils/            → shared utilities
 - **ALL changes must go through git.** No direct file edits without committing.
 - **User reviews every change before commit.** Do not commit/push without explicit approval.
 - Plugin goal: make bot dialogue feel more human / 更像真人.
+
+## Repository Map
+
+A full codemap is available at `codemap.md` in the project root.
+
+Before working on any task, read `codemap.md` to understand:
+- Project architecture and entry points
+- Directory responsibilities and design patterns
+- Data flow and integration points between modules
+
+For deep work on a specific folder, also read that folder's `codemap.md`.
