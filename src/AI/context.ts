@@ -371,6 +371,10 @@ export class Context {
 
         if (groupName.length > 5 && !isNaN(parseInt(groupName))) {
             const gid = `QQ-Group:${groupName}`;
+            // If this is the current group, use ctx.group.groupId for consistency
+            if (ctx.group.groupId === gid) {
+                return { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName };
+            }
             ({ ctx } = getCtxAndMsg(ctx.endPoint.userId, '', gid));
             return { isPrivate: false, id: gid, name: ctx.group.groupName || '未知群聊' };
         }
@@ -405,8 +409,15 @@ export class Context {
             const epId = ctx.endPoint.userId;
             const groupList = await getGroupList(epId);
             if (groupList && Array.isArray(groupList)) {
-                const group_id = groupList.find(item => item.group_name === groupName)?.group_id;
-                if (group_id) return { isPrivate: false, id: `QQ-Group:${group_id}`, name: groupName };
+                const group = groupList.find(item => item.group_name === groupName);
+                if (group && group.group_id) {
+                    const gid = `QQ-Group:${group.group_id}`;
+                    // If this is the current group, use ctx.group.groupId for consistency
+                    if (ctx.group.groupId === gid) {
+                        return { isPrivate: false, id: ctx.group.groupId, name: groupName };
+                    }
+                    return { isPrivate: false, id: gid, name: groupName };
+                }
             }
         }
 
