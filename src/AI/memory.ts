@@ -265,6 +265,7 @@ export class MemoryManager {
         await m.updateVector();
         this.memoryMap[id] = m;
         this.limitMemory();
+        logger.info(`新记忆已创建: id=${id}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
     }
 
     deleteMemory(ids: string[] = [], kws: string[] = []) {
@@ -285,6 +286,7 @@ export class MemoryManager {
         const { memoryLimit } = ConfigManager.memory;
         const limit = memoryLimit > 0 ? memoryLimit - 1 : 0; // 预留1个位置用于存储最新记忆
         if (this.memoryList.length <= limit) return;
+        const beforeCount = this.memoryList.length;
         this.memoryList.map((m) => {
             return {
                 id: m.id,
@@ -294,6 +296,8 @@ export class MemoryManager {
             .sort((a, b) => b.score - a.score) // 从大到小排序
             .slice(limit)
             .forEach(item => delete this.memoryMap?.[item.id]);
+        const evicted = beforeCount - this.memoryList.length;
+        if (evicted > 0) logger.info('记忆淘汰: ' + evicted + '条 (当前' + this.memoryList.length + '/' + memoryLimit + ')');
     }
 
     clearMemory() {
@@ -461,6 +465,7 @@ export class MemoryManager {
                 .filter(function(m: any) { return m._finalScore > 0.2; })
                 .sort(function(a: any, b: any) { return b._finalScore - a._finalScore; })
                 .slice(0, topK);
+            logger.info('LLM 精排完成: 入参' + candidates.length + '条 → 返回' + Math.min(topK, candidates.length) + '条');
         } catch (e: any) {
             logger.error('LLM 精排失败: ' + (e?.message || e) + '，回退到 base_score');
             return candidates.slice(0, topK);
