@@ -168,7 +168,14 @@ export class Context {
             obs.lastSpeak = now;
 
             const maxObserved = ConfigManager.memory.maxObservedMessages || 10;
-            if (obs.rawMessages.length >= maxObserved) {
+            const needUpdate = obs.rawMessages.length >= maxObserved;
+
+            // Check if impression is stale (exceeds impressionMaxAge)
+            const maxAge = ConfigManager.memory.impressionMaxAge || 3;
+            const imp = ai.memory.impressions[uid];
+            const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
+
+            if (needUpdate || (staleImpression && obs.rawMessages.length > 0)) {
                 await ai.memory.updateImpression(uid);
                 obs.rawMessages = [];
             }

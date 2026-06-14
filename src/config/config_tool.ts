@@ -7,13 +7,6 @@ export class ToolConfig {
         ToolConfig.ext = ConfigManager.getExt('aiplugin4_2:函数调用');
 
         seal.ext.registerBoolConfig(ToolConfig.ext, "是否开启调用函数功能", true, "");
-        seal.ext.registerBoolConfig(ToolConfig.ext, "是否切换为提示词工程", false, "API在不支持function calling功能的时候开启");
-        seal.ext.registerTemplateConfig(ToolConfig.ext, "工具函数prompt模板", [
-            `{{序号}}. 名称:{{{函数名称}}}
-    - 描述:{{{函数描述}}}
-    - 参数信息:{{{参数信息}}}
-    - 必需参数:{{{必需参数}}}`
-        ], "提示词工程中每个函数的prompt");
         seal.ext.registerIntConfig(ToolConfig.ext, "允许连续调用函数次数", 5, "单次对话中允许连续调用函数的次数");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "不允许调用的函数", [
             'ban',
@@ -57,8 +50,6 @@ export class ToolConfig {
     static get() {
         return {
             isTool: seal.ext.getBoolConfig(ToolConfig.ext, "是否开启调用函数功能"),
-            usePromptEngineering: seal.ext.getBoolConfig(ToolConfig.ext, "是否切换为提示词工程"),
-            toolsPromptTemplate: ConfigManager.getHandlebarsTemplateConfig(ToolConfig.ext, "工具函数prompt模板"),
             maxCallCount: seal.ext.getIntConfig(ToolConfig.ext, "允许连续调用函数次数"),
             toolsNotAllow: seal.ext.getTemplateConfig(ToolConfig.ext, "不允许调用的函数"),
             toolsDefaultClosed: seal.ext.getTemplateConfig(ToolConfig.ext, "默认关闭的函数"),
