@@ -162,6 +162,22 @@ export class MemoryManager {
     }
 
     reviveMemoryMap() {
+        // 检测旧格式记忆（无 scope 字段）——直接清空
+        let hasOldFormat = false;
+        for (const id in this.memoryMap) {
+            const m = this.memoryMap[id] as any;
+            if (!m.hasOwnProperty('scope')) {
+                hasOldFormat = true;
+                break;
+            }
+        }
+        if (hasOldFormat) {
+            this.memoryMap = {};
+            logger.info('检测到旧格式记忆（无 scope 字段），已清空。新记忆将使用新格式。');
+            return;
+        }
+
+        // 正常 revival（原有逻辑）
         for (const id in this.memoryMap) {
             this.memoryMap[id] = revive(Memory, this.memoryMap[id]);
             if (!this.memoryMap[id].text) {
@@ -602,6 +618,19 @@ export class MemoryManager {
 export class KnowledgeMemoryManager extends MemoryManager {
     constructor() {
         super();
+    }
+
+    reviveMemoryMap() {
+        // 知识库记忆不清空旧格式，保持原样存活
+        for (const id in this.memoryMap) {
+            this.memoryMap[id] = revive(Memory, this.memoryMap[id]);
+            if (!this.memoryMap[id].text) {
+                delete this.memoryMap[id];
+                continue;
+            }
+            if (!this.memoryMap[id].hasOwnProperty('images')) this.memoryMap[id].images = [];
+            this.memoryMap[id].images = this.memoryMap[id].images.map(image => revive(Image, image));
+        }
     }
 
     init() {
