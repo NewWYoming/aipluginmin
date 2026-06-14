@@ -322,8 +322,9 @@ export class AIManager {
 
             // Persist memoryMap clear from reviveMemoryMap old-format detection
             if ((ai.memory as any)._needsSave) {
-                AIManager.saveAI(id);
                 (ai.memory as any)._needsSave = false;
+                // 直接写 storage — saveAI 此时 cache 未就绪，会静默跳过
+                ConfigManager.ext.storageSet(`AI_${id}`, JSON.stringify(ai));
                 logger.info(`AI_${id}: 旧格式记忆已清除并持久化`);
             }
 
