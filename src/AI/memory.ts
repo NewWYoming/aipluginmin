@@ -319,28 +319,51 @@ export class MemoryManager {
             }
             await Promise.all(this.memoryList.map(async m => {
                 if (m.vector.length !== embeddingDimension) {
-                    logger.info(`记忆向量维度不匹配，重新获取向量: ${m.id}`);
+                    logger.info('记忆向量维度不匹配，重新获取向量: ' + m.id);
                     await m.updateVector();
                 }
-            }))
+            }));
         }
 
+        // Helper: Jaccard similarity
+        const jaccard = function(a: string[], b: string[]): number {
+            const setA = new Set(a), setB = new Set(b);
+            const intersection = [...setA].filter(function(x) { return setB.has(x); }).length;
+            const union = new Set([...setA, ...setB]).size;
+            return union === 0 ? 0 : intersection / union;
+        };
+        const tokenize = function(s: string): string[] {
+            return s.split(/[\s,，。！？、；：""'']+/).filter(function(t) { return t.length > 0; });
+        };
+        const now = Math.floor(Date.now() / 1000);
+
         return this.memoryList
-            .map(m => {
+            .map(function(m) {
                 if (includeImages && m.images.length === 0) return null;
                 const mc = m.copy;
-                if (mc.keywords.some(kw => query.includes(kw))) mc.weight += 10; //提权
+
+                // Composite pre-score
+                const kwJaccard = jaccard(tokenize(query), mc.keywords);
+                const daysSinceCreate = (now - mc.createTime) / 86400;
+                const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
+                const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
+                const importanceScore = importanceMap[mc.importance] || 0.5;
+                const baseScore = 0.50 * kwJaccard + 0.30 * recency + 0.20 * importanceScore;
+
+                (mc as any)._baseScore = baseScore;
                 return mc;
             })
-            .filter(m => m)
-            .sort((a, b) => {
+            .filter(function(m) { return m !== null; })
+            .filter(function(m: any) { return m._baseScore > 0.1; })
+            .sort(function(a: any, b: any) {
                 switch (method) {
                     case 'weight': return b.weight - a.weight;
                     case 'similarity': return b.calculateSimilarity(qv, ul, gl, kws) - a.calculateSimilarity(qv, ul, gl, kws);
-                    case 'score': return b.calculateScore(qv, ul, gl, kws) - a.calculateScore(qv, ul, gl, kws);
+                    case 'score': return (b._baseScore || 0) - (a._baseScore || 0);
                     case 'early': return a.createTime - b.createTime;
                     case 'late': return b.createTime - a.createTime;
                     case 'recent': return b.lastMentionTime - a.lastMentionTime;
+                    default: return (b._baseScore || 0) - (a._baseScore || 0);
                 }
             })
             .slice(0, options.topK || 10);
@@ -401,6 +424,106 @@ export class MemoryManager {
             if (m.scope === 'private' && m.sessionInfo.id === currentSessionId) return true;
             return false;
         });
+    }
+
+    /** 为指定用户更新印象（Tier 2） */
+    async updateImpression(uid: string): Promise<void> {
+      const obs = this.observations[uid];
+      if (!obs || obs.rawMessages.length < 3) return;
+
+      const current = this.impressions[uid];
+      const oldImpression = current?.text || '无';
+      const now = Math.floor(Date.now() / 1000);
+
+      const prompt = '你正在根据最近的观察，更新对某个群友的简短印象。\n当前印象: ' + oldImpression + '\n最近观察:\n' +
+        obs.rawMessages.map(function(m, i) { return (i + 1) + '. ' + m; }).join('\n') +
+        '\n\n请用 ≤80 字更新印象。只描述性格特点、说话风格、行为习惯。不要描述具体事件。如果初次观察，给出初次印象。\n返回 JSON: {"impression": "印象文字"}';
+
+      try {
+        const { url: chatUrl, apiKey: chatApiKey } = ConfigManager.request;
+        const body = {
+          messages: [{ role: 'user', content: prompt }],
+          model: ConfigManager.request.model || 'deepseek-chat',
+          response_format: { type: 'json_object' }
+        };
+        const response = await fetch(chatUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + chatApiKey
+          },
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        const parsed = JSON.parse(content);
+        if (parsed?.impression && typeof parsed.impression === 'string') {
+          const maxLen = ConfigManager.memory.impressionMaxLength || 80;
+          this.impressions[uid] = {
+            text: parsed.impression.slice(0, maxLen),
+            updatedAt: now
+          };
+          logger.info('印象更新: ' + uid + ' → ' + this.impressions[uid].text);
+        }
+      } catch (e: any) {
+        logger.error('印象更新失败 (' + uid + '): ' + (e?.message || e));
+      }
+    }
+
+    /** 基于当前 context 构建印象层提示文本 */
+    buildImpressionPrompt(ctx: seal.MsgContext, context: Context): string {
+      const lines: string[] = [];
+      const seen = new Set<string>();
+
+      for (const msg of context.messages) {
+        if (msg.role !== 'user') continue;
+        const uid = msg.uid;
+        if (!uid || seen.has(uid)) continue;
+        seen.add(uid);
+
+        const imp = this.impressions[uid];
+        if (!imp || !imp.text) continue;  // 空印象跳过
+
+        const name = msg.name || '未知用户';
+        lines.push(name + ': ' + imp.text);
+      }
+
+      return lines.join('\n');
+    }
+
+    /** 清理已退群 + 长期沉默用户的印象（每天 0 点，仅群聊） */
+    async cleanupImpressions(ctx: seal.MsgContext, ai: AI): Promise<void> {
+      if (ctx.isPrivate) return;
+
+      const now = Math.floor(Date.now() / 1000);
+      const inactiveDays = ConfigManager.memory.cleanupInactiveDays || 30;
+
+      // 尝试获取当前群成员列表
+      const memberIds = new Set<string>();
+      try {
+        const { getGroupMemberList } = require('../utils/utils_ob11');
+        const { netExists } = require('../utils/utils_ob11');
+        if (netExists()) {
+          const gid = (ctx as any).group?.groupId?.replace(/^.+:/, '') || '';
+          const members = await getGroupMemberList((ctx as any).endPoint?.userId, gid);
+          if (members && Array.isArray(members)) {
+            for (const m of members) {
+              memberIds.add('QQ:' + (m.user_id || ''));
+            }
+          }
+        }
+      } catch { /* 获取失败跳过，仍然清理超时用户 */ }
+
+      for (const uid of Object.keys(this.observations)) {
+        const obs = this.observations[uid];
+        const silentDays = (now - obs.lastSpeak) / 86400;
+
+        if (!memberIds.has(uid) || silentDays > inactiveDays) {
+          delete this.impressions[uid];
+          delete this.observations[uid];
+          logger.info('印象清理: ' + uid);
+        }
+      }
     }
 
     getLatestMemoryListText(si: SessionInfo, p: number = 1): string {
