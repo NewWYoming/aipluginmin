@@ -417,6 +417,60 @@ export class MemoryManager {
             .slice(0, topK);
     }
 
+    /** LLM 精排候选记忆（Phase 4 — 后处理步骤） */
+    async llmRerank(query: string, candidates: Memory[], topK: number): Promise<Memory[]> {
+        if (candidates.length === 0) return [];
+        if (candidates.length <= 5) return candidates.slice(0, topK);
+
+        const listText = candidates.map(function(m, i) { return i + '. [' + m.id + '] ' + m.text.slice(0, 100); }).join('\n');
+        const prompt = '根据当前对话，评估以下记忆的相关度 (0-5分):\n当前对话: ' + query.slice(0, 200) + '\n\n记忆列表:\n' + listText + '\n\n返回 JSON: {"scores": {"id1": 4, "id2": 2, ...}}';
+
+        try {
+            const { url: chatUrl, apiKey: chatApiKey } = ConfigManager.request;
+            const body = {
+                messages: [{ role: 'user', content: prompt }],
+                model: ConfigManager.request.model || 'deepseek-chat',
+                response_format: { type: 'json_object' }
+            };
+            const response = await fetch(chatUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chatApiKey },
+                body: JSON.stringify(body)
+            });
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content || '{}';
+            const scores = JSON.parse(content).scores || {};
+
+            return candidates
+                .map(function(m: any) {
+                    const llmScore = (scores[m.id] || 0) / 5;
+                    const finalScore = 0.7 * llmScore + 0.3 * ((m._baseScore || 0));
+                    (m as any)._finalScore = finalScore;
+                    return m;
+                })
+                .filter(function(m: any) { return m._finalScore > 0.2; })
+                .sort(function(a: any, b: any) { return b._finalScore - a._finalScore; })
+                .slice(0, topK);
+        } catch (e: any) {
+            logger.error('LLM 精排失败: ' + (e?.message || e) + '，回退到 base_score');
+            return candidates.slice(0, topK);
+        }
+    }
+
+    /** 获取相关记忆（复合打分 + LLM 精排） */
+    async getRelevantMemories(text: string, ui: UserInfo, gi: GroupInfo, topK: number): Promise<Memory[]> {
+        const candidates = await this.search(text, {
+            topK: 20,
+            userList: ui ? [ui] : [],
+            groupList: gi ? [gi] : [],
+            keywords: [],
+            includeImages: false,
+            method: 'score'
+        });
+        if (topK <= 5) return candidates.slice(0, topK);  // 少时不调精排
+        return await this.llmRerank(text, candidates, topK);
+    }
+
     getPOVFilteredMemories(currentScope: string, currentSessionId: string): Memory[] {
         return this.memoryList.filter(m => {
             if (m.scope === 'universal') return true;
@@ -576,13 +630,11 @@ export class MemoryManager {
     }
 
     async buildMemoryPrompt(ctx: seal.MsgContext, context: Context, text: string, ui: UserInfo, gi: GroupInfo): Promise<string> {
-        const currentScope = ctx.isPrivate ? 'private' : 'group';
-        const currentSessionId = ctx.isPrivate ? ctx.player.userId : ctx.group.groupId;
+        const { memoryShowNumber } = ConfigManager.memory;
 
         // Bot's own memories (universal + matching scope)
         const botAI = AIManager.getAI(ctx.endPoint.userId);
-        const botMemories = botAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
-        const scoredBot = await botAI.memory.getTopScoreMemoryList(text, ui, gi, botMemories);
+        const scoredBot = await botAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
         let s = botAI.memory.buildMemory(
             { isPrivate: true, id: ctx.endPoint.userId, name: seal.formatTmpl(ctx, '核心:骰子名字') },
             scoredBot
@@ -591,8 +643,7 @@ export class MemoryManager {
         if (ctx.isPrivate) {
             // Private chat: user's private memories
             const userAI = AIManager.getAI(ctx.player.userId);
-            const userMemories = userAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
-            const scored = await userAI.memory.getTopScoreMemoryList(text, ui, gi, userMemories);
+            const scored = await userAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
             return s + userAI.memory.buildMemory(
                 { isPrivate: true, id: ctx.player.userId, name: ctx.player.name },
                 scored
@@ -600,8 +651,7 @@ export class MemoryManager {
         } else {
             // Group chat: group memories ONLY. No per-user private memory injection!
             const groupAI = AIManager.getAI(ctx.group.groupId);
-            const groupMemories = groupAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
-            const scored = await groupAI.memory.getTopScoreMemoryList(text, ui, gi, groupMemories);
+            const scored = await groupAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
             return s + groupAI.memory.buildMemory(
                 { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName },
                 scored
