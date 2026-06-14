@@ -226,8 +226,8 @@ export class MemoryManager {
         m.weight = 5;
         m.images = images;
         await m.updateVector();
-        this.limitMemory();
         this.memoryMap[id] = m;
+        this.limitMemory();
     }
 
     deleteMemory(ids: string[] = [], kws: string[] = []) {
