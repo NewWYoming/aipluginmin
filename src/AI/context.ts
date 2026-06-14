@@ -27,10 +27,9 @@ export interface Message {
 }
 
 export class Context {
-    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'summaryCounter', 'autoNameMod'];
+    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'autoNameMod'];
     messages: Message[];
     ignoreList: string[];
-    summaryCounter: number; // 用于短期记忆自动总结计数
     autoNameMod: number; // 自动修改上下文里的名字，0:不自动修改，1:修改为昵称，2:修改为群名片
 
     lastReply: string;
@@ -40,7 +39,6 @@ export class Context {
     constructor() {
         this.messages = [];
         this.ignoreList = [];
-        this.summaryCounter = 0;
         this.lastReply = '';
         this.counter = 0;
         this.timer = null;
@@ -71,12 +69,10 @@ export class Context {
 
     clearMessages(...roles: string[]) {
         if (roles.length === 0) {
-            this.summaryCounter = 0;
             this.messages = [];
         } else {
             this.messages = this.messages.filter(message => {
                 if (roles.includes(message.role)) {
-                    this.summaryCounter--;
                     return false;
                 }
                 return true;
@@ -85,7 +81,6 @@ export class Context {
     }
 
     async addMessage(ctx: seal.MsgContext, msg: seal.Message, ai: AI, content: string, images: Image[], role: 'user' | 'assistant', msgId: string = '') {
-        const { isShortMemory, shortMemorySummaryRound } = ConfigManager.memory;
         const messages = this.messages;
 
         const now = Math.floor(Date.now() / 1000);
@@ -142,21 +137,28 @@ export class Context {
                 }]
             };
             messages.push(message);
-
-            // 更新短期记忆
-            if (isShortMemory) {
-                if (role === 'user') {
-                    this.summaryCounter++;
-                }
-                if (this.summaryCounter >= shortMemorySummaryRound) {
-                    this.summaryCounter = 0;
-                    ai.memory.updateShortMemory(ctx, msg, ai);
-                }
-            }
         }
 
         //更新记忆权重
         ai.memory.updateRelatedMemoryWeight(ctx, ai.context, content, role);
+
+        // 印象层 Tier 1 — 静默收集用户发言
+        if (role === 'user' && ctx && ctx.player) {
+            const uid = ctx.player.userId;
+            if (!ai.memory.observations[uid]) {
+                ai.memory.observations[uid] = { rawMessages: [], msgCount: 0, lastSpeak: 0 };
+            }
+            const obs = ai.memory.observations[uid];
+            obs.rawMessages.push(content);
+            obs.msgCount += 1;
+            obs.lastSpeak = now;
+
+            const maxObserved = ConfigManager.memory.maxObservedMessages || 10;
+            if (obs.rawMessages.length >= maxObserved) {
+                const updated = await ai.memory.updateImpression(uid);
+                obs.rawMessages = [];
+            }
+        }
 
         //删除多余的上下文
         this.limitMessages();
