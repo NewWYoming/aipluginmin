@@ -18,7 +18,7 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 | `config/` | All plugin configuration keys registered via `seal.ext.register*Config`. Central coordinator is `ConfigManager`. Nine config groups: message, request, reply, received, tool, log, backend, image, memory. |
 | `AI/` | Core AI session logic: `AI` class (per-session state + chat dispatch), `Context` (message history, observation collection for impressions), `MemoryManager` (POV-scoped memory, impression layer, composite scoring + LLM rerank), `ImageManager` / `ImagePool` (image handling). |
 | `cmd/` | Chat command system: `root.ts` defines the `SubCmd` base class and `registerCmd()` which creates the `.ai` command and its ~20 subcommands (`standby`, `forget`, `prompt`, `timer`, `image`, `memory`, etc.). |
-| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. ~20 tool implementations (`tool_roll_check`, `tool_web`, `tool_memory`, etc.). |
+| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. ~42 tools across 21 files (`tool_roll_check`, `tool_web`, `tool_alias`, `tool_memory`, etc.). |
 | `service/` | AI provider abstraction: `AIClient` (HTTP transport), `ToolCallLoop` (execution orchestrator), `providers/` (backend-specific adapters like OpenAI, Claude, etc.). |
 | `utils/` | Shared utilities: string handling, SealDice context scaffolding (`utils_seal`), message processing (`utils_message`), OB11 API (`utils_ob11`), update checker (`utils_update`). |
 | `logger.ts` | Singleton `Logger` instance. Logs with configurable verbosity (off / brief / detailed). Respects `logLevel` from config. |
