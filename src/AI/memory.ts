@@ -19,7 +19,7 @@ export interface searchOptions {
 }
 
 export class Memory {
-    static validKeys: (keyof Memory)[] = ['id', 'vector', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images'];
+    static validKeys: (keyof Memory)[] = ['id', 'vector', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
     id: string; // 记忆ID
     vector: number[]; // 记忆向量
     text: string; // 记忆内容
@@ -31,6 +31,9 @@ export class Memory {
     keywords: string[];
     weight: number; // 记忆权重，0-10
     images: Image[];
+    scope: 'private' | 'group' | 'universal';
+    witnesses: string[];
+    importance: 1 | 3 | 5;
 
     constructor() {
         this.id = '';
@@ -48,6 +51,9 @@ export class Memory {
         this.keywords = [];
         this.weight = 0;
         this.images = [];
+        this.scope = 'group';
+        this.witnesses = [];
+        this.importance = 3;
     }
 
     get copy(): Memory {
