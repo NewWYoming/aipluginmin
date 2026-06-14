@@ -425,3 +425,34 @@ search() → 返回 preScore top 20 → buildMemoryPrompt 中调用 async llmRer
 - [ ] 所有跨模块引用已更新（context.ts, utils_message.ts, config_message.ts, config_memory.ts, cmd/sub_cmd/memory.ts, tool_memory.ts）
 - [ ] 所有 validKeys 已更新（Memory, MemoryManager, Context）
 - [ ] 系统消息模板已添加印象层、删除短期记忆段
+
+## 实现注意事项（plan 阶段确认）
+
+以下问题 spec 层面已定方向，具体实现细节在 plan 中敲定：
+
+### 1. 印象清理定时器接入点
+每天 0 点清理沉默/退群用户。实现方式二选一：
+- 方案 A：借助现有 `checkActiveTimer`（AI 实例被访问时被动触发，检查是否跨天）
+- 方案 B：注册新 `TimerInfo` 到 `TimerManager`
+
+### 2. LLM 精排失败回退
+`llmRerank()` 调用失败时（超时/400/解析错误）：**回退到 base_score**，直接取 top-K 注入。不阻塞回复。
+
+### 3. 印象收集插入点（addMessage 内部）
+Tier 1 的 `rawMessages.push()` 和阈值判断放在 `addMessage` 的哪个位置：
+- 建议：在 `updateRelatedMemoryWeight` 调用之后、`limitMessages()` 之前
+- 理由：此时消息已写入 context，语义完整，且不影响后续裁剪
+
+### 4. addMemory 方法签名变更
+`MemoryManager.addMemory()` 新增参数 `scope` 和 `importance`：
+- `scope`：从 `add_memory` 工具的 `memory_type` 推导（private→'private', group→'group'）
+- `importance`：工具可选参数，默认 3
+- `witnesses`：自动从 `context.userInfoList` 提取当前在线用户 ID
+
+### 5. search() 关键词提权移除
+旧 `memory.ts:426` 行 `mc.weight += 10` 逻辑：**直接删除**。关键词匹配效果已纳入 Jaccard 复合打分，不再通过修改 weight 实现。
+
+### 6. buildMemoryPrompt 的 currentScope 获取
+`buildMemoryPrompt(ctx, context, text, ui, gi)` 已有 `ctx` 参数：
+- `currentScope` = `ctx.isPrivate ? 'private' : 'group'`
+- `currentSessionId` = `ctx.isPrivate ? ctx.player.userId : ctx.group.groupId`
