@@ -234,6 +234,7 @@ export class AI {
         if (today !== this._lastCleanupDate) {
             this._lastCleanupDate = today;
             await this.memory.cleanupImpressions(ctx, this);
+            this.context.cleanupStaleAliases();
         }
 
         const { segs, start, end } = this.setting.activeTimeInfo;
