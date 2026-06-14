@@ -88,7 +88,10 @@ export function registerWeb() {
                     headers,
                     body: JSON.stringify({ q })
                 });
-                if (!resp.ok) throw new Error(`Jina HTTP ${resp.status}`);
+                if (!resp.ok) {
+                    const errBody = await resp.text().catch(() => '');
+                    throw new Error(`Jina HTTP ${resp.status}: ${errBody.slice(0, 200)}`);
+                }
                 const data = await resp.json();
 
                 const results = data?.data || [];
