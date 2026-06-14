@@ -172,7 +172,9 @@ buildSystemMessage 时:
     - 印象非空 → 拼接:
   "Alice: 程序员，说话爱用梗，喜欢逗你\nBob: 沉默寡言，偶尔冒金句"
   总长度 ≤ 300 tokens（≈ 8-10 条印象）
-```
+
+系统消息模板使用条件渲染: {{#if 印象层}}...{{/if}}，
+当印象拼接结果非空时提供该变量。无印象时整个印象段不渲染。```
 
 #### 印象清理（每天 0 点）
 
@@ -243,6 +245,9 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 
 ```
 记忆注入总字数 ≤ 当前对话字数的 40%
+
+"当前对话字数" = context.messages 中所有 msgArray content 的字符总和
+（即最近 maxRounds 轮对话的原始内容长度）
 
 超过时:
   1. 印象层始终保留（极小，≤300 tokens）
@@ -398,7 +403,9 @@ search() → 返回 preScore top 20 → buildMemoryPrompt 中调用 async llmRer
 
 ### KnowledgeMemoryManager
 
-知识库记忆的 scope 统一设置为 `'universal'`（跨场景可见），不受 POV 过滤限制。`knowledgeMM.search()` 无需修改。
+知识库记忆的 scope 统一设置为 `'universal'`（跨场景可见），不受 POV 过滤限制。
+
+**注意**：`KnowledgeMemoryManager` 继承 `MemoryManager`，其 `reviveMemoryMap()` 会自动从 `sessionInfo.isPrivate` 推断 scope → 会错误地将知识记忆设为 `'group'`。实现时需覆盖 `reviveMemoryMap()` 或在 `updateKnowledgeMemory()` 中强制 `scope = 'universal'`。
 
 ## 自检清单
 
