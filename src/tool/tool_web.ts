@@ -2,6 +2,33 @@ import { logger } from "../logger";
 import { ConfigManager } from "../config/configManager";
 import { Tool } from "./tool";
 
+// 搜索缓存 (query → content)
+const searchCache = new Map<string, { content: string; ts: number }>();
+const SEARCH_CACHE_TTL = 15 * 60 * 1000; // 15分钟
+
+// 页面缓存 (URL → content)
+const pageCache = new Map<string, { content: string; ts: number }>();
+const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时
+
+// 带重试的 fetch
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 2): Promise<Response> {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const resp = await fetch(url, options);
+            if (resp.status === 429 && i < retries) {
+                const delay = Math.pow(2, i + 1) * 1000;
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+            }
+            return resp;
+        } catch (e) {
+            if (i === retries) throw e;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
+    throw new Error('unreachable');
+}
+
 export function registerWeb() {
     const toolSearch = new Tool({
         type: "function",
@@ -36,6 +63,47 @@ export function registerWeb() {
     });
     toolSearch.solve = async (_, __, ___, args) => {
         const { q, page, categories, time_range = '' } = args;
+
+        // Jina Search: 有 API Key 时优先使用
+        const { jinaApiKey } = ConfigManager.backend;
+        if (jinaApiKey && q) {
+            try {
+                // 搜索缓存
+                const cacheKey = `jina:${q}|${categories || ''}|${time_range || ''}`;
+                const cached = searchCache.get(cacheKey);
+                if (cached && (Date.now() - cached.ts) < SEARCH_CACHE_TTL) {
+                    return { content: cached.content, images: [] };
+                }
+
+                const jinaUrl = `https://s.jina.ai/${encodeURIComponent(q)}`;
+                const headers: Record<string, string> = {
+                    'Authorization': `Bearer ${jinaApiKey}`,
+                    'Accept': 'application/json'
+                };
+                if (page && page > 1) headers['X-Page'] = String(page);
+
+                logger.info(`使用Jina搜索: ${jinaUrl}`);
+                const resp = await fetchWithRetry(jinaUrl, { headers });
+                if (!resp.ok) throw new Error(`Jina HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                const results = data?.data || [];
+                if (results.length === 0) return { content: `未搜索到结果`, images: [] };
+
+                const formatted = results.map((r: any, i: number) =>
+                    `${i + 1}. ${r.title || ''}\n   链接: ${r.url || ''}\n   ${r.description || r.content?.slice(0, 300) || ''}`
+                ).join('\n');
+
+                const result = { content: `搜索结果(${results.length}条):\n${formatted}`, images: [] };
+                // 缓存结果
+                searchCache.set(cacheKey, { content: result.content, ts: Date.now() });
+                return result;
+            } catch (e: any) {
+                logger.error('Jina搜索失败，回退到SearXNG: ' + (e?.message || e));
+                // fall through to SearXNG below
+            }
+        }
+
         const { webSearchUrl } = ConfigManager.backend;
 
         let part = 1;
@@ -76,7 +144,11 @@ export function registerWeb() {
 - 相关性:${result.score}`;
             }).join('\n');
 
-            return { content: s, images: [] };
+            const result = { content: s, images: [] };
+            // 缓存搜索结果
+            const searxngCacheKey = `searxng:${q}|${categories || ''}|${time_range || ''}|${page || ''}`;
+            searchCache.set(searxngCacheKey, { content: result.content, ts: Date.now() });
+            return result;
         } catch (error) {
             logger.error("在web_search中请求出错：", error);
             return { content: `使用搜索引擎搜索失败:${error}`, images: [] };
@@ -100,42 +172,46 @@ export function registerWeb() {
             }
         }
     });
-    tool.solve = async (_, __, ___, args) => {
+    tool.solve = async (ctx, msg, ai, args) => {
         const { url } = args;
-        const { webReadUrl } = ConfigManager.backend;
+        const { jinaApiKey } = ConfigManager.backend;
+
+        // 页面缓存检查
+        const cached = pageCache.get(url);
+        if (cached && (Date.now() - cached.ts) < PAGE_CACHE_TTL) {
+            return { content: cached.content, images: [] };
+        }
 
         try {
-            logger.info(`读取网页内容: ${url}`);
-
-            const response = await fetch(`${webReadUrl}/scrape`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ url })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(`请求失败: ${JSON.stringify(data)}`);
+            const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+            const headers: Record<string, string> = {
+                'Accept': 'text/markdown'
+            };
+            if (jinaApiKey) {
+                headers['Authorization'] = `Bearer ${jinaApiKey}`;
             }
 
-            const { title, content, links } = data;
+            logger.info(`读取网页内容(Jina): ${url}`);
+            const resp = await fetchWithRetry(jinaUrl, { headers });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const content = await resp.text();
 
-            if (!title && !content && (!links || links.length === 0)) {
+            if (!content || content.trim().length === 0) {
                 return { content: `未能从网页中提取到有效内容`, images: [] };
             }
 
-            const result = `标题: ${title || "无标题"}\n内容: ${content || "无内容"}\n网页包含链接:\n` +
-                (links && links.length > 0
-                    ? links.map((link: string, index: number) => `${index + 1}. ${link}`).join('\n')
-                    : "无链接");
+            const result = { content: `网页内容:\n${content.slice(0, 8000)}`, images: [] };
+            // 缓存
+            pageCache.set(url, { content: result.content, ts: Date.now() });
+            if (pageCache.size > 200) {
+                const oldest = [...pageCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0][0];
+                pageCache.delete(oldest);
+            }
 
-            return { content: result, images: [] };
-        } catch (error) {
-            logger.error("在web_read中请求出错：", error);
-            return { content: `读取网页内容失败: ${error}`, images: [] };
+            return result;
+        } catch (e: any) {
+            logger.error('网页读取失败: ' + (e?.message || e));
+            return { content: `读取网页失败: ${e?.message || e}`, images: [] };
         }
     }
 }
