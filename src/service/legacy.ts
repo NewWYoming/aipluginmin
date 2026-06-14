@@ -5,8 +5,6 @@ import { ConfigManager } from '../config/configManager';
 import { logger } from '../logger';
 import { withTimeout } from '../utils/utils';
 
-const vectorCache: { text: string, vector: number[] } = { text: '', vector: [] };
-
 export async function fetchData(url: string, apiKey: string, bodyObject: any): Promise<any> {
     // 打印请求发送前的上下文
     if (bodyObject.hasOwnProperty('messages')) {
@@ -98,60 +96,6 @@ export async function sendITTRequest(messages: {
     } catch (e) {
         logger.error("在sendITTRequest中请求出错:", e.message);
         return '';
-    }
-}
-
-export async function getEmbedding(text: string): Promise<number[]> {
-    if (!text) {
-        logger.warning(`getEmbedding: 文本为空`);
-        return [];
-    }
-
-    const { timeout } = ConfigManager.request;
-    const { embeddingDimension, embeddingUrl, embeddingApiKey, embeddingBodyTemplate } = ConfigManager.memory;
-
-    if (vectorCache.text === text && vectorCache.vector.length === embeddingDimension) {
-        const v = vectorCache.vector;
-        return v;
-    }
-
-    try {
-        const bodyObject: any = {};
-        for (const s of embeddingBodyTemplate) {
-          if (!s.trim()) continue;
-          try {
-            const obj = JSON.parse(`{${s}}`);
-            Object.assign(bodyObject, obj);
-          } catch (err) {
-            throw new Error(`解析body的【${s}】时出现错误:${err}`);
-          }
-        }
-        if (!bodyObject.hasOwnProperty('input')) {
-          bodyObject.input = text;
-        }
-        if (!bodyObject.hasOwnProperty('dimensions')) {
-          bodyObject.dimensions = embeddingDimension;
-        }
-        const time = Date.now();
-
-        const data = await withTimeout(() => fetchData(embeddingUrl, embeddingApiKey, bodyObject), timeout);
-
-        if (data.data && data.data.length > 0) {
-            AIManager.updateUsage(data.model, data.usage);
-
-            const embedding = data.data[0].embedding;
-
-            logger.info(`文本:`, text, `\n响应embedding长度:`, embedding.length, '\nlatency:', Date.now() - time, 'ms');
-            vectorCache.text = text;
-            vectorCache.vector = embedding;
-
-            return embedding;
-        } else {
-            throw new Error(`服务器响应中没有data或data为空\n响应体:${JSON.stringify(data, null, 2)}`);
-        }
-    } catch (e) {
-        logger.error("在getEmbedding中出错:", e.message);
-        return [];
     }
 }
 

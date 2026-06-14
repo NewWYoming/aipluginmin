@@ -1,10 +1,9 @@
 import { ConfigManager } from "../config/configManager";
 import { AI, AIManager, GroupInfo, SessionInfo, UserInfo } from "./AI";
 import { Context } from "./context";
-import { cosineSimilarity, generateId, getCommonGroup, getCommonKeyword, getCommonUser, revive } from "../utils/utils";
+import { generateId, getCommonGroup, getCommonKeyword, getCommonUser, revive } from "../utils/utils";
 import { AIClient } from "../service/AIClient";
 import { logger } from "../logger";
-import { getEmbedding } from "../service/legacy";
 import { fmtDate } from "../utils/utils_string";
 import { Image, ImageManager } from "./image";
 
@@ -14,13 +13,12 @@ export interface searchOptions {
     groupList: GroupInfo[];
     keywords: string[];
     includeImages: boolean;
-    method: 'weight' | 'similarity' | 'score' | 'early' | 'late' | 'recent';
+    method: 'weight' | 'score' | 'early' | 'late' | 'recent';
 }
 
 export class Memory {
     static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
     id: string; // 记忆ID
-    vector: number[]; // 记忆向量
     text: string; // 记忆内容
     sessionInfo: SessionInfo;
     userList: UserInfo[];
@@ -36,7 +34,6 @@ export class Memory {
 
     constructor() {
         this.id = '';
-        this.vector = [];
         this.text = '';
         this.sessionInfo = {
             id: '',
@@ -58,7 +55,6 @@ export class Memory {
     get copy(): Memory {
         const m = new Memory();
         m.id = this.id;
-        m.vector = [...this.vector];
         m.text = this.text;
         m.sessionInfo = JSON.parse(JSON.stringify(this.sessionInfo));
         m.userList = JSON.parse(JSON.stringify(this.userList));
@@ -92,18 +88,15 @@ export class Memory {
 
     /**
      * 计算记忆与查询的相似度分数
-     * @param v  查询向量
      * @param ul 查询用户列表
      * @param gl 查询群组列表
      * @param kws 查询关键词列表
      * @returns 相似度分数（0-1）
      */
-    calculateSimilarity(v: number[], ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
-        // 总权重 0-1
-        const totalWeight = (v.length ? 0.4 : 0) + (ul.length ? 0.2 : 0) + (gl.length ? 0.2 : 0) + (kws.length ? 0.2 : 0);
+    calculateSimilarity(ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
+        // 总权重
+        const totalWeight = (ul.length ? 0.2 : 0) + (gl.length ? 0.2 : 0) + (kws.length ? 0.2 : 0);
         if (totalWeight === 0) return 0;
-        // 向量相似度分数（如果提供了向量v） 0-1
-        const vectorSimilarity = (v && v.length > 0 && this.vector && this.vector.length > 0) ? (cosineSimilarity(v, this.vector) + 1) / 2 : 0;
         // 用户相似度分数 0-1
         const commonUser = getCommonUser(this.userList, ul);
         const userSimilarity = (ul && ul.length > 0) ? commonUser.length / (this.userList.length + ul.length - commonUser.length) : 0;
@@ -114,38 +107,22 @@ export class Memory {
         const commonKeyword = getCommonKeyword(this.keywords, kws);
         const keywordSimilarity = (kws && kws.length > 0) ? commonKeyword.length / kws.length : 0;
         // 综合相似度分数 0-1
-        const avgSimilarity = vectorSimilarity * 0.4 + userSimilarity * 0.2 + groupSimilarity * 0.2 + keywordSimilarity * 0.2;
+        const avgSimilarity = userSimilarity * 0.2 + groupSimilarity * 0.2 + keywordSimilarity * 0.2;
         // 相似度增强因子 0-1
         return avgSimilarity / totalWeight;
     }
 
     /**
      * 计算记忆的最终分数
-     * @param v  查询向量
      * @param ul 查询用户列表
      * @param gl 查询群组列表
      * @param kws 查询关键词列表
      * @returns 相似度分数（0-1）
      */
-    calculateScore(v: number[], ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
-        return this.weight * 0.03 + this.calculateSimilarity(v, ul, gl, kws) * 0.7;
+    calculateScore(ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
+        return this.weight * 0.03 + this.calculateSimilarity(ul, gl, kws) * 0.7;
     }
 
-    async updateVector() {
-        const { isMemoryVector, embeddingDimension } = ConfigManager.memory;
-        if (isMemoryVector) {
-            const vector = await getEmbedding(this.text);
-            if (!vector.length) {
-                logger.error('返回向量为空');
-                return;
-            }
-            if (vector.length !== embeddingDimension) {
-                logger.error(`向量维度不匹配。期望: ${embeddingDimension}, 实际: ${vector.length}`);
-                return;
-            }
-            this.vector = vector;
-        }
-    }
 }
 
 export interface UserObservation {
@@ -262,10 +239,6 @@ export class MemoryManager {
         m.scope = ctx.isPrivate ? 'private' : 'group';
         m.importance = importance;
         m.images = images;
-        const { isMemoryVector } = ConfigManager.memory;
-        if (isMemoryVector) {
-            await m.updateVector();
-        }
         this.memoryMap[id] = m;
         this.limitMemory();
         logger.info(`新记忆已创建: id=${id}, scope=${m.scope}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
@@ -283,6 +256,7 @@ export class MemoryManager {
                 }
             }
         }
+        logger.info(`记忆已删除: ids=[${ids.join(',')}], keywords=[${kws.join(',')}]`);
     }
 
     limitMemory() {
@@ -305,6 +279,7 @@ export class MemoryManager {
 
     clearMemory() {
         this.memoryMap = {};
+        logger.info(`所有记忆已清除`);
     }
 
     async search(query: string, options: searchOptions = {
@@ -317,22 +292,6 @@ export class MemoryManager {
     }) {
         if (!this.memoryList.length) return [];
         const { userList: ul, groupList: gl, keywords: kws, includeImages, method } = options;
-
-        const { isMemoryVector, embeddingDimension } = ConfigManager.memory;
-        let qv: number[] = [];
-        if (isMemoryVector && query) {
-            qv = await getEmbedding(query);
-            if (!qv.length) {
-                logger.error('查询向量为空');
-                return [];
-            }
-            await Promise.all(this.memoryList.map(async m => {
-                if (m.vector.length !== embeddingDimension) {
-                    logger.warning('记忆向量维度不匹配，重新获取向量: ' + m.id);
-                    await m.updateVector();
-                }
-            }));
-        }
 
         // Helper: Jaccard similarity
         const jaccard = function(a: string[], b: string[]): number {
@@ -367,7 +326,6 @@ export class MemoryManager {
             .sort(function(a: any, b: any) {
                 switch (method) {
                     case 'weight': return b.weight - a.weight;
-                    case 'similarity': return b.calculateSimilarity(qv, ul, gl, kws) - a.calculateSimilarity(qv, ul, gl, kws);
                     case 'score': return (b._baseScore || 0) - (a._baseScore || 0);
                     case 'early': return a.createTime - b.createTime;
                     case 'late': return b.createTime - a.createTime;
@@ -422,7 +380,7 @@ export class MemoryManager {
 
     private scoreAndSlice(candidates: Memory[], text: string, ui: UserInfo, gi: GroupInfo, topK: number): Memory[] {
         return candidates
-            .sort((a, b) => b.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []) - a.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []))
+            .sort((a, b) => b.calculateScore(ui ? [ui] : [], gi ? [gi] : [], []) - a.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []))
             .slice(0, topK);
     }
 
@@ -854,21 +812,18 @@ export class KnowledgeMemoryManager extends MemoryManager {
         }
 
         const now = Math.floor(Date.now() / 1000);
-        await Promise.all(Object.values(memoryMap).map(async m => {
+        Object.values(memoryMap).forEach(m => {
             if (this.memoryMap.hasOwnProperty(m.id)) {
                 const m2 = this.memoryMap[m.id];
-                m.vector = m2.vector;
-                if (m2.text !== m.text) await m.updateVector();
                 m.createTime = m2.createTime;
                 m.lastMentionTime = m2.lastMentionTime;
                 m.weight = m2.weight;
             } else {
-                await m.updateVector();
                 m.createTime = now;
                 m.lastMentionTime = now;
                 m.weight = 5;
             }
-        }))
+        })
 
         this.memoryMap = memoryMap;
         this.save();

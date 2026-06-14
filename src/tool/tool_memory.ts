@@ -133,6 +133,7 @@ export function registerMemory() {
 
         //记忆相关处理
         ai.memory.deleteMemory(id_list, keywords);
+        logger.info(`LLM调用del_memory: AI=${ai.id}, ids=[${id_list.join(',')}], keywords=[${keywords.join(',')}]`);
         AIManager.saveAI(ai.id);
 
         return { content: `删除记忆成功`, images: [] };
@@ -186,7 +187,7 @@ export function registerMemory() {
                     method: {
                         type: 'string',
                         description: '搜索方法，默认score（复合打分）',
-                        enum: ['weight', 'similarity', 'score', 'early', 'late', 'recent']
+                        enum: ['weight', 'score', 'early', 'late', 'recent']
                     }
                 },
                 required: []
@@ -239,6 +240,7 @@ export function registerMemory() {
 
         const options: SearchOptions = { topK, keywords, userList, groupList, includeImages, method };
         const memoryList = await targetAi.memory.search(query, options);
+        logger.info(`LLM调用search_memory: scope=${ctx.isPrivate ? 'private' : 'group'}, query="${query}", topK=${topK}, 结果=${memoryList.length}条`);
         const images = Array.from(new Set([].concat(...memoryList.map(m => m.images))));
         return { content: targetAi.memory.buildMemory(si, memoryList) || '暂无记忆', images };
     }
@@ -270,6 +272,7 @@ export function registerMemory() {
         // Private chat: ai is already the current user's AI
 
         targetAi.memory.clearMemory();
+        logger.info(`LLM调用clear_memory: AI=${targetAi.id}`);
         AIManager.saveAI(targetAi.id);
         return { content: `清除记忆成功`, images: [] };
     }
