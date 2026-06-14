@@ -29,18 +29,18 @@
 
 ```
 onNotCommandReceived → index.ts routes → AI.chat()
-  → handleMessages() assembles system prompt + context + samples
+  → handleMessages() assembles system prompt + context + POV-scoped memories + impressions
   → ToolCallLoop (thinking-enabled) iterates tool calls via AIClient
   → Provider (DeepSeek V4 / OpenAI-compatible) handles API specifics
   → handleReply() parses response → replyToSender()
-  → context.addMessage() persists to messages array
+  → context.addMessage() persists to messages array, collects user observations (Tier 1)
 
 Config system:
   ConfigManager (singleton) → domain config classes → SeaDice ext.register*Config() → typed get() with 3s TTL cache
 
 Session model:
   AIManager.getAI(sid) → per-session AI instance (private=uid, group=gid)
-  Each AI has: context, memory, imageManager, imagePool, toolManager, setting
+  Each AI has: context, memory (POV-scoped with impressions + composite scoring), imageManager, imagePool, toolManager, setting
 ```
 
 ## Key Design Patterns
