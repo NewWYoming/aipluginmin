@@ -27,6 +27,12 @@ export function registerMemory() {
                         type: 'string',
                         description: '记忆内容，尽量简短，可用<|img:xxxxxx|>插入图片，无需附带时间与来源'
                     },
+                    importance: {
+                        type: 'number',
+                        enum: [1, 3, 5],
+                        description: '重要性: 5=核心事实(身份/偏好), 3=一般信息, 1=琐碎',
+                        default: 3
+                    },
                     keywords: {
                         type: 'array',
                         description: '相关用户名称列表',
@@ -54,7 +60,7 @@ export function registerMemory() {
         }
     });
     toolAdd.solve = async (ctx, _, ai, args) => {
-        const { memory_type, name, text, keywords = [], userList = [], groupList = [] } = args;
+        const { memory_type, name, text, importance, keywords = [], userList = [], groupList = [] } = args;
 
         if (memory_type === "private") {
             const ui = await ai.context.findUserInfo(ctx, name, true);
@@ -84,7 +90,7 @@ export function registerMemory() {
         }
 
         //记忆相关处理
-        await ai.memory.addMemory(ctx, ai, uiList, giList, Array.isArray(keywords) ? keywords : [], [], text);
+        await ai.memory.addMemory(ctx, ai, uiList, giList, Array.isArray(keywords) ? keywords : [], [], text, importance || 3);
         AIManager.saveAI(ai.id);
 
         return { content: `添加记忆成功`, images: [] };

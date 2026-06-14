@@ -206,7 +206,7 @@ export class MemoryManager {
         return Array.from(keywords);
     }
 
-    async addMemory(ctx: seal.MsgContext, ai: AI, ul: UserInfo[], gl: GroupInfo[], kws: string[], images: Image[], text: string) {
+    async addMemory(ctx: seal.MsgContext, ai: AI, ul: UserInfo[], gl: GroupInfo[], kws: string[], images: Image[], text: string, importance: 1 | 3 | 5 = 3) {
         let id = generateId(), a = 0;
         while (this.memoryMap.hasOwnProperty(id)) {
             id = generateId();
@@ -249,6 +249,7 @@ export class MemoryManager {
         m.lastMentionTime = now;
         m.keywords = kws;
         m.weight = 5;
+        m.importance = importance;
         m.images = images;
         await m.updateVector();
         this.memoryMap[id] = m;
