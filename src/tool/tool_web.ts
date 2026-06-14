@@ -10,7 +10,7 @@ const SEARCH_CACHE_TTL = 15 * 60 * 1000; // 15分钟
 const pageCache = new Map<string, { content: string; ts: number }>();
 const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时
 
-// 带重试的 fetch —— 包含响应体完整性验证
+// 带重试的 fetch（配合 Connection: close 头绕过 goproxy H2 复用 bug）
 async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 2): Promise<Response> {
     for (let i = 0; i <= retries; i++) {
         try {
@@ -20,19 +20,6 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
                 const delay = Math.pow(2, i + 1) * 1000;
                 await new Promise(r => setTimeout(r, delay));
                 continue;
-            }
-            // 验证响应体可完整读取（捕获 goproxy H2 EOF）
-            // clone 保留原始 Response 供调用方使用
-            try {
-                await resp.clone().text();
-            } catch (bodyErr: any) {
-                // 响应体读取失败大概率是网络层问题（EOF/RST），重试即可
-                if (i < retries) {
-                    logger.warn(`fetch 响应体读取失败，重试 ${i + 1}/${retries}: ${bodyErr?.message || bodyErr}`);
-                    await new Promise(r => setTimeout(r, 500 + i * 500));
-                    continue;
-                }
-                throw bodyErr;
             }
             return resp;
         } catch (e) {
