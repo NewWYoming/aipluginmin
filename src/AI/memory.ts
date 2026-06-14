@@ -2,6 +2,7 @@ import { ConfigManager } from "../config/configManager";
 import { AI, AIManager, GroupInfo, SessionInfo, UserInfo } from "./AI";
 import { Context } from "./context";
 import { cosineSimilarity, generateId, getCommonGroup, getCommonKeyword, getCommonUser, revive } from "../utils/utils";
+import { AIClient } from "../service/AIClient";
 import { logger } from "../logger";
 import { getEmbedding } from "../service/legacy";
 import { fmtDate } from "../utils/utils_string";
@@ -427,19 +428,27 @@ export class MemoryManager {
         const prompt = '根据当前对话，评估以下记忆的相关度 (0-5分):\n当前对话: ' + query.slice(0, 200) + '\n\n记忆列表:\n' + listText + '\n\n返回 JSON: {"scores": {"id1": 4, "id2": 2, ...}}';
 
         try {
-            const { url: chatUrl, apiKey: chatApiKey } = ConfigManager.request;
-            const body = {
-                messages: [{ role: 'user', content: prompt }],
-                model: ConfigManager.request.model || 'deepseek-chat',
-                response_format: { type: 'json_object' }
-            };
-            const response = await fetch(chatUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chatApiKey },
-                body: JSON.stringify(body)
+            const requestConfig = ConfigManager.request;
+            const client = new AIClient({
+                apiProvider: requestConfig.apiProvider,
+                url: requestConfig.url,
+                apiKey: requestConfig.apiKey,
+                model: requestConfig.memoryModel,
+                maxTokens: 256,
+                timeout: 15000,
+                thinkingEnabled: false,
+                reasoningEffort: 'low',
+                toolThinkingEnabled: false,
+                toolReasoningEffort: 'minimal',
+                extraBody: {},
             });
-            const data = await response.json();
-            const content = data.choices?.[0]?.message?.content || '{}';
+
+            const response = await client.chat(
+                [{ role: 'user', content: prompt }],
+                null, 'none',
+            );
+
+            const content = response.content || '{}';
             const scores = JSON.parse(content).scores || {};
 
             return candidates
@@ -528,22 +537,27 @@ export class MemoryManager {
         '\n\n请用 ≤80 字更新印象。只描述性格特点、说话风格、行为习惯。不要描述具体事件。如果初次观察，给出初次印象。\n返回 JSON: {"impression": "印象文字"}';
 
       try {
-        const { url: chatUrl, apiKey: chatApiKey } = ConfigManager.request;
-        const body = {
-          messages: [{ role: 'user', content: prompt }],
-          model: ConfigManager.request.model || 'deepseek-chat',
-          response_format: { type: 'json_object' }
-        };
-        const response = await fetch(chatUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + chatApiKey
-          },
-          body: JSON.stringify(body)
+        const requestConfig = ConfigManager.request;
+        const client = new AIClient({
+          apiProvider: requestConfig.apiProvider,
+          url: requestConfig.url,
+          apiKey: requestConfig.apiKey,
+          model: requestConfig.memoryModel,
+          maxTokens: 256,
+          timeout: 30000,
+          thinkingEnabled: false,
+          reasoningEffort: 'low',
+          toolThinkingEnabled: false,
+          toolReasoningEffort: 'minimal',
+          extraBody: {},
         });
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || '';
+
+        const response = await client.chat(
+          [{ role: 'user', content: prompt + '\n返回 JSON: {"impression": "印象文字"}' }],
+          null, 'none',
+        );
+
+        const content = response.content || '';
         const parsed = JSON.parse(content);
         if (parsed?.impression && typeof parsed.impression === 'string') {
           const maxLen = ConfigManager.memory.impressionMaxLength || 80;
