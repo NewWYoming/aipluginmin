@@ -35,24 +35,22 @@ async function fetchWithRetry(url, options, retries = 2) {
 
 | 文件 | 改动 |
 |------|------|
-| `src/tool/tool_web.ts` | ① `fetchWithRetry` 内部消费响应体验证完整性；② Jina Search 加 `Connection: close`；③ Jina Reader 加 `Connection: close` |
-| `src/config/config.ts` | 版本号 5.0.48 → 5.0.49 |
-| `header.txt` | 版本号 5.0.48 → 5.0.49 |
+| `src/tool/tool_web.ts` | ① `fetchWithRetry` 维持简洁（goja 不支持 `Response.clone()`）；② Jina Search 加 `Connection: close`；③ Jina Reader 加 `Connection: close` |
+| `src/config/config.ts` | 版本号 5.0.48 → 5.1.0 |
+| `header.txt` | 版本号 5.0.48 → 5.1.0 |
 
 ---
 
-### Task 1: 增强 fetchWithRetry —— 响应体消费也纳入重试范围
+### Task 1: fetchWithRetry 保持简洁（goja 不支持 Response.clone()）
 
 **文件:** `src/tool/tool_web.ts:14-30`
 
-**策略:** 在 `fetchWithRetry` 成功获得 Response 后，立即 `clone()` 并尝试消费响应体（`.text()`）。如果消费失败，视为网络错误，进入重试。返回已消费文本 + 原始 Response 对象（供调用方使用）。
+**策略:** `Connection: close` 头强制 HTTP/1.1 新连接是主要防御手段（绕过 goproxy H2 复用 bug），`fetchWithRetry` 维持原有的 fetch 级重试（网络错误 + 429 退避），不做 body 级别验证（实测 goja 的 `fetch` 实现不支持 `Response.clone()`）。
 
 **实现:**
 
-保持 `fetchWithRetry` 签名不变（返回 `Promise<Response>`），内部完成响应体验证：
-
 ```typescript
-// 带重试的 fetch —— 包含响应体完整性验证
+// 带重试的 fetch（配合 Connection: close 头绕过 goproxy H2 复用 bug）
 async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 2): Promise<Response> {
     for (let i = 0; i <= retries; i++) {
         try {
@@ -62,19 +60,6 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
                 const delay = Math.pow(2, i + 1) * 1000;
                 await new Promise(r => setTimeout(r, delay));
                 continue;
-            }
-            // 验证响应体可完整读取（捕获 goproxy H2 EOF）
-            // clone 保留原始 Response 供调用方使用
-            try {
-                await resp.clone().text();
-            } catch (bodyErr: any) {
-                // 响应体读取失败大概率是网络层问题（EOF/RST），重试即可
-                if (i < retries) {
-                    logger.warn(`fetch 响应体读取失败，重试 ${i + 1}/${retries}: ${bodyErr?.message || bodyErr}`);
-                    await new Promise(r => setTimeout(r, 500 + i * 500));
-                    continue;
-                }
-                throw bodyErr;
             }
             return resp;
         } catch (e) {
@@ -86,7 +71,7 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
 }
 ```
 
-**注意:** `resp.clone().text()` 消费了克隆体，原始的 `resp` 的 body 仍然未读，调用方可以正常 `.json()` / `.text()`。由于我们已经验证过一次了，调用方消费时几乎不会失败（但如果失败，由调用方自己的 catch 处理）。
+**注意:** 如果 body 仍被截断（极小概率，配合 `Connection: close` 后基本不会发生），调用方的 `.json()` 会抛错，由外层 catch fallback 到 SearXNG。
 
 ---
 
@@ -126,7 +111,7 @@ const headers: Record<string, string> = {
 
 **文件:** `src/config/config.ts`, `header.txt`
 
-**改动:** `5.0.48` → `5.0.49`
+**改动:** `5.0.48` → `5.1.0`
 
 **验证:** `npm run build` 通过无报错。
 
@@ -137,7 +122,7 @@ const headers: Record<string, string> = {
 | 检查项 | 结果 |
 |--------|------|
 | `fetchWithRetry` 返回类型兼容 | ✅ 仍返回 `Response`，调用方 `.json()` / `.text()` 无需改动 |
-| `clone().text()` 开销 | ✅ 每请求多读一次响应体（内存），但两次读取同一份底层数据，成本可忽略 |
 | `Connection: close` 副作用 | ✅ 无副作用——仅禁用 HTTP keep-alive，每个请求多一次 TCP 握手（~50ms），对聊天场景影响可忽略 |
+| goja 兼容性 | ✅ 不使用 `Response.clone()`（goja 不支持），仅依赖 `Connection: close` + fetch 级重试 |
 | SearXNG 路径不受影响 | ✅ SearXNG 使用原始 `fetch`，不经过 `fetchWithRetry`，不加 `Connection: close` |
 | 其他模块影响 | ✅ `fetchWithRetry` 仅在本文件使用，无外部引用 |
