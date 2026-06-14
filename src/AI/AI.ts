@@ -320,6 +320,13 @@ export class AIManager {
                 ai.imageManager.imagePool = ai.imagePool;
             }
 
+            // Persist memoryMap clear from reviveMemoryMap old-format detection
+            if ((ai.memory as any)._needsSave) {
+                AIManager.saveAI(id);
+                (ai.memory as any)._needsSave = false;
+                logger.info(`AI_${id}: 旧格式记忆已清除并持久化`);
+            }
+
             // Migrate old stolenImages to ImagePool (one-time)
             try {
                 const rawData = ConfigManager.ext.storageGet('AI_' + id);
