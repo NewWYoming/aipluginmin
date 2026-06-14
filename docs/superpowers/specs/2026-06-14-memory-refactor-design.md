@@ -270,11 +270,15 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 
 ### Phase 2（POV 作用域）
 
-旧 Memory 对象无 `scope`/`witnesses`/`importance` 字段。
-在 `reviveMemoryMap` 中自动推断：
-- `scope` = `sessionInfo.isPrivate ? 'private' : 'group'`
-- `witnesses` = `[]`（空白，不参与过滤）
-- `importance` = `3`（默认一般）
+旧 Memory 对象无 `scope`/`witnesses`/`importance` 字段，且在旧系统中权重系统已崩坏（bug 导致权重全锁定在 0 或 ≥10），保留意义不大。
+
+**迁移策略：直接删除全部旧记忆。**
+
+- 在 `MemoryManager` 初始化时检测旧数据格式（无 `scope` 字段的 Memory）
+- 若检测到 → 清空 `memoryMap`，日志记录
+- 此后所有新记忆均自带 `scope`/`witnesses`/`importance`
+
+`KnowledgeMemoryManager` 的知识记忆强制保留（通过 `updateKnowledgeMemory` 重建，scope 设为 `universal`）。
 
 ### Phase 3（印象层）
 
@@ -411,7 +415,7 @@ search() → 返回 preScore top 20 → buildMemoryPrompt 中调用 async llmRer
 
 - [ ] 无 TBD/TODO，所有参数有默认值
 - [ ] Bug 修复与功能改进分阶段，互不阻塞
-- [ ] 旧记忆数据零丢失（自动推断 scope/importance 默认值）
+- [ ] 旧记忆数据主动清空（旧权重崩坏，保留无意义），知识记忆保留
 - [ ] 旧短期记忆/impression 数据丢弃是预期的（validKeys 移除）
 - [ ] 群聊不再注入用户私人记忆（POV 过滤）
 - [ ] 新用户默认无印象，空印象不注入上下文
