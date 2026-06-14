@@ -30,7 +30,7 @@ export function registerMemory() {
                     importance: {
                         type: 'number',
                         enum: [1, 3, 5],
-                        description: '重要性: 5=核心事实(身份/偏好), 3=一般信息, 1=琐碎',
+                        description: '记忆重要性: 5=核心事实（身份、重要偏好、明确要求记住的事），3=一般信息（值得记但非关键），1=琐碎（随口一提的闲聊）。默认3。',
                         default: 3
                     },
                     keywords: {
@@ -59,12 +59,16 @@ export function registerMemory() {
             }
         }
     });
-    toolAdd.solve = async (ctx, _, ai, args) => {
+    toolAdd.solve = async (ctx, msg, ai, args) => {
         const { memory_type, name, text, importance, keywords = [], userList = [], groupList = [] } = args;
 
         if (memory_type === "private") {
-            const ui = await ai.context.findUserInfo(ctx, name, true);
-            if (ui === null) return { content: `未找到<${name}>`, images: [] };
+            let ui = await ai.context.findUserInfo(ctx, name, true);
+            // 兜底：用消息发送者信息
+            if (ui === null && msg?.sender) {
+                ui = { isPrivate: true, id: msg.sender.userId, name: msg.sender.name || name };
+            }
+            if (ui === null) return { content: `未找到用户<${name}>`, images: [] };
 
             ({ ctx } = getCtxAndMsg(ctx.endPoint.userId, ui.id, ''));
             ai = AIManager.getAI(ui.id);
