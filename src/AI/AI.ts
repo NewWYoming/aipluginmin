@@ -55,7 +55,7 @@ export class Setting {
 }
 
 export class AI {
-    static validKeys: (keyof AI)[] = ['context', 'tool', 'memory', 'imageManager', 'imagePool', 'setting'];
+    static validKeys: (keyof AI)[] = ['context', 'tool', 'memory', 'imageManager', 'imagePool', 'setting', '_lastCleanupDate'];
     id: string;
     context: Context;
     tool: ToolManager;
