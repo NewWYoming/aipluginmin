@@ -27,10 +27,11 @@ export interface Message {
 }
 
 export class Context {
-    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'autoNameMod'];
+    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'autoNameMod', 'aliases'];
     messages: Message[];
     ignoreList: string[];
     autoNameMod: number; // 自动修改上下文里的名字，0:不自动修改，1:修改为昵称，2:修改为群名片
+    aliases: { [uid: string]: { names: string[]; lastUsed: { [name: string]: number } } };
 
     lastReply: string;
     counter: number;
@@ -39,6 +40,7 @@ export class Context {
     constructor() {
         this.messages = [];
         this.ignoreList = [];
+        this.aliases = {};
         this.lastReply = '';
         this.counter = 0;
         this.timer = null;
@@ -117,6 +119,17 @@ export class Context {
         // 添加消息到上下文
         const name = role == 'user' ? ctx.player.name : seal.formatTmpl(ctx, "核心:骰子名字");
         const length = messages.length;
+
+        // 注册用户别名（UID → 所有名称变体）
+        if (role === 'user' && uid) {
+            if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
+            const names = this.aliases[uid].names;
+            if (!names.includes(name)) {
+                names.push(name);
+            }
+            this.aliases[uid].lastUsed[name] = now;
+        }
+
         if (length !== 0 && messages[length - 1].uid === uid && !/<[\|│｜]?function(?:_call)?>/.test(content)) {
             messages[length - 1].images.push(...images);
             messages[length - 1].msgArray.push({
@@ -247,6 +260,26 @@ export class Context {
         const match = name.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
         if (match) name = match[1] || match[2];
 
+        // 优先查别名表（UID 主键，跨群跨名有效）
+        const aliasNow = Math.floor(Date.now() / 1000);
+        for (const aid of Object.keys(this.aliases)) {
+            const alias = this.aliases[aid];
+            if (alias.names.includes(name)) {
+                alias.lastUsed[name] = aliasNow;
+                if (this.ignoreList.includes(aid)) return null;
+                return { isPrivate: true, id: aid, name };
+            }
+            if (name.length > 4) {
+                for (const n of alias.names) {
+                    if (levenshteinDistance(name, n) <= 2) {
+                        alias.lastUsed[n] = aliasNow;
+                        if (this.ignoreList.includes(aid)) return null;
+                        return { isPrivate: true, id: aid, name: n };
+                    }
+                }
+            }
+        }
+
         if (name === ctx.player.name) {
             const uid = ctx.player.userId;
             if (this.ignoreList.includes(uid)) return null;
@@ -281,9 +314,13 @@ export class Context {
             if (!ctx.isPrivate) {
                 const groupMemberList = await getGroupMemberList(epId, gid.replace(/^.+:/, ''));
                 if (groupMemberList && Array.isArray(groupMemberList)) {
-                    const user_id = groupMemberList.find(item => item.card === name || item.nickname === name)?.user_id;
+                    const matchedMember = groupMemberList.find(item => item.card === name || item.nickname === name);
+                    const user_id = matchedMember?.user_id;
                     if (user_id) {
                         const uid = `QQ:${user_id}`;
+                        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
+                        if (!this.aliases[uid].names.includes(matchedMember.nickname)) this.aliases[uid].names.push(matchedMember.nickname);
+                        if (matchedMember.card && !this.aliases[uid].names.includes(matchedMember.card)) this.aliases[uid].names.push(matchedMember.card);
                         if (this.ignoreList.includes(uid)) return null;
                         return { isPrivate: true, id: uid, name };
                     }
@@ -293,9 +330,13 @@ export class Context {
             if (findInFriendList) {
                 const friendList = await getFriendList(epId);
                 if (friendList && Array.isArray(friendList)) {
-                    const user_id = friendList.find(item => item.nickname === name || item.remark === name)?.user_id;
+                    const matchedFriend = friendList.find(item => item.nickname === name || item.remark === name);
+                    const user_id = matchedFriend?.user_id;
                     if (user_id) {
                         const uid = `QQ:${user_id}`;
+                        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
+                        if (!this.aliases[uid].names.includes(matchedFriend.nickname)) this.aliases[uid].names.push(matchedFriend.nickname);
+                        if (matchedFriend.remark && !this.aliases[uid].names.includes(matchedFriend.remark)) this.aliases[uid].names.push(matchedFriend.remark);
                         if (this.ignoreList.includes(uid)) return null;
                         return { isPrivate: true, id: uid, name };
                     }
@@ -479,6 +520,24 @@ export class Context {
             case 2: {
                 await this.setName(epId, gid, uid, 'card');
                 break;
+            }
+        }
+    }
+
+    /** 清理 1 年未使用的别名 */
+    cleanupStaleAliases(): void {
+        const now = Math.floor(Date.now() / 1000);
+        const oneYear = 365 * 24 * 3600;
+        for (const uid of Object.keys(this.aliases)) {
+            const alias = this.aliases[uid];
+            const names = alias.names.filter(n => (now - (alias.lastUsed[n] || 0)) < oneYear);
+            if (names.length === 0) {
+                delete this.aliases[uid];
+            } else {
+                alias.names = names;
+                for (const n of Object.keys(alias.lastUsed)) {
+                    if (!names.includes(n)) delete alias.lastUsed[n];
+                }
             }
         }
     }
