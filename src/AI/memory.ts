@@ -448,10 +448,10 @@ export class MemoryManager {
         for (const id in this.memoryMap) {
             const m = this.memoryMap[id];
             if (m.keywords.some(kw => s.includes(kw))) {
-                m.weight = Math.max(10, m.weight + increase);
+                m.weight = Math.min(10, m.weight + increase);
                 m.lastMentionTime = now;
             } else {
-                m.weight = Math.min(0, m.weight - decrease);
+                m.weight = Math.max(0, m.weight - decrease);
             }
         }
     }
