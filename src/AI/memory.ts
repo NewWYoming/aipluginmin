@@ -69,6 +69,9 @@ export class Memory {
         m.keywords = [...this.keywords];
         m.weight = this.weight;
         m.images = [...this.images];
+        m.scope = this.scope;
+        m.witnesses = [...this.witnesses];
+        m.importance = this.importance;
         return m;
     }
 
@@ -489,8 +492,11 @@ export class MemoryManager {
         if (!ctx.isPrivate) context.userInfoList.forEach(ui => AIManager.getAI(ui.id).memory.updateMemoryWeight(s, role));
     }
 
-    async getTopScoreMemoryList(text: string = '', ui: UserInfo = null, gi: GroupInfo = null) {
+    async getTopScoreMemoryList(text: string = '', ui: UserInfo = null, gi: GroupInfo = null, preFiltered?: Memory[]) {
         const { memoryShowNumber } = ConfigManager.memory;
+        if (preFiltered) {
+            return this.scoreAndSlice(preFiltered, text, ui, gi, memoryShowNumber);
+        }
         return await this.search(text, {
             topK: memoryShowNumber,
             userList: ui ? [ui] : [],
@@ -498,6 +504,21 @@ export class MemoryManager {
             keywords: [],
             includeImages: false,
             method: 'score'
+        });
+    }
+
+    private scoreAndSlice(candidates: Memory[], text: string, ui: UserInfo, gi: GroupInfo, topK: number): Memory[] {
+        return candidates
+            .sort((a, b) => b.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []) - a.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []))
+            .slice(0, topK);
+    }
+
+    getPOVFilteredMemories(currentScope: string, currentSessionId: string): Memory[] {
+        return this.memoryList.filter(m => {
+            if (m.scope === 'universal') return true;
+            if (m.scope === currentScope && m.sessionInfo.id === currentSessionId) return true;
+            if (m.scope === 'private' && m.sessionInfo.id === currentSessionId) return true;
+            return false;
         });
     }
 
@@ -551,44 +572,36 @@ export class MemoryManager {
     }
 
     async buildMemoryPrompt(ctx: seal.MsgContext, context: Context, text: string, ui: UserInfo, gi: GroupInfo): Promise<string> {
-        const ai = AIManager.getAI(ctx.endPoint.userId);
-        let s = ai.memory.buildMemory({
-            isPrivate: true,
-            id: ctx.endPoint.userId,
-            name: seal.formatTmpl(ctx, "核心:骰子名字")
-        }, await ai.memory.getTopScoreMemoryList(text, ui, gi));
+        const currentScope = ctx.isPrivate ? 'private' : 'group';
+        const currentSessionId = ctx.isPrivate ? ctx.player.userId : ctx.group.groupId;
+
+        // Bot's own memories (universal + matching scope)
+        const botAI = AIManager.getAI(ctx.endPoint.userId);
+        const botMemories = botAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
+        const scoredBot = await botAI.memory.getTopScoreMemoryList(text, ui, gi, botMemories);
+        let s = botAI.memory.buildMemory(
+            { isPrivate: true, id: ctx.endPoint.userId, name: seal.formatTmpl(ctx, '核心:骰子名字') },
+            scoredBot
+        );
 
         if (ctx.isPrivate) {
-            return this.buildMemory({
-                isPrivate: true,
-                id: ctx.player.userId,
-                name: ctx.player.name
-            }, await ai.memory.getTopScoreMemoryList(text, ui, gi));
+            // Private chat: user's private memories
+            const userAI = AIManager.getAI(ctx.player.userId);
+            const userMemories = userAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
+            const scored = await userAI.memory.getTopScoreMemoryList(text, ui, gi, userMemories);
+            return s + userAI.memory.buildMemory(
+                { isPrivate: true, id: ctx.player.userId, name: ctx.player.name },
+                scored
+            );
         } else {
-            // 群聊记忆
-            s += this.buildMemory({
-                isPrivate: false,
-                id: ctx.group.groupId,
-                name: ctx.group.groupName
-            }, await ai.memory.getTopScoreMemoryList(text, ui, gi));
-
-            // 群内用户的个人记忆
-            const set = new Set<string>();
-            for (const ui of context.userInfoList) {
-                const name = ui.name;
-                const uid = ui.id;
-                if (set.has(uid)) continue;
-                set.add(uid);
-
-                const ai = AIManager.getAI(uid);
-                s += ai.memory.buildMemory({
-                    isPrivate: true,
-                    id: uid,
-                    name: name
-                }, await ai.memory.getTopScoreMemoryList(text, ui, gi));
-            }
-
-            return s;
+            // Group chat: group memories ONLY. No per-user private memory injection!
+            const groupAI = AIManager.getAI(ctx.group.groupId);
+            const groupMemories = groupAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
+            const scored = await groupAI.memory.getTopScoreMemoryList(text, ui, gi, groupMemories);
+            return s + groupAI.memory.buildMemory(
+                { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName },
+                scored
+            );
         }
     }
 
