@@ -71,6 +71,11 @@ ID:上面是分割符
             `"stop":null`,
             `"stream":false`
         ], "messages不存在时，将会自动替换");
+        // 印象层配置
+        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大观察消息数", 10, "连续收集多少条用户消息后自动生成印象");
+        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大长度", 80, "印象文字最大字符数");
+        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·清理未活跃天数", 30, "超过此天数未发言的用户印象将被清理");
+
         seal.ext.registerTemplateConfig(MemoryConfig.ext, "记忆总结prompt模板", [
             `你现在扮演的角色如下:
 ## 扮演详情
@@ -177,7 +182,10 @@ ID:上面是分割符
             memoryUrl: seal.ext.getStringConfig(MemoryConfig.ext, "记忆总结 url地址"),
             memoryApiKey: seal.ext.getStringConfig(MemoryConfig.ext, "记忆总结 API Key"),
             memoryBodyTemplate: seal.ext.getTemplateConfig(MemoryConfig.ext, "记忆总结 body"),
-            memoryPromptTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "记忆总结prompt模板")
+            memoryPromptTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "记忆总结prompt模板"),
+            maxObservedMessages: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大观察消息数"),
+            impressionMaxLength: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大长度"),
+            cleanupInactiveDays: seal.ext.getIntConfig(MemoryConfig.ext, "印象·清理未活跃天数"),
         }
     }
 }

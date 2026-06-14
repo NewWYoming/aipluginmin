@@ -32,7 +32,7 @@ function main() {
   }
 
   //接受非指令消息
-  ext.onNotCommandReceived = (ctx, msg): void | Promise<void> => {
+  ext.onNotCommandReceived = async (ctx, msg): Promise<void> => {
     try {
       const { disabledInPrivate, globalStandby, triggerRegex, ignoreRegex, triggerCondition } = ConfigManager.received;
       if (ctx.isPrivate && disabledInPrivate) {
@@ -45,7 +45,7 @@ function main() {
       const ai = AIManager.getAI(sid);
 
       // 检查活跃时间定时器
-      ai.checkActiveTimer(ctx);
+      await ai.checkActiveTimer(ctx);
 
       const message = msg.message;
       const messageArray = transformTextToArray(message);
@@ -124,7 +124,7 @@ function main() {
   }
 
   //接受的指令
-  ext.onCommandReceived = (ctx, msg, cmdArgs) => {
+  ext.onCommandReceived = async (ctx, msg, cmdArgs) => {
     try {
       if (ToolManager.cmdArgs === null) {
         ToolManager.cmdArgs = cmdArgs;
@@ -138,7 +138,7 @@ function main() {
         const ai = AIManager.getAI(sid);
 
         // 检查活跃时间定时器
-        ai.checkActiveTimer(ctx);
+        await ai.checkActiveTimer(ctx);
 
         const message = msg.message;
         const messageArray = transformTextToArray(message);
@@ -157,7 +157,7 @@ function main() {
   }
 
   //骰子发送的消息
-  ext.onMessageSend = (ctx, msg) => {
+  ext.onMessageSend = async (ctx, msg) => {
     try {
       const uid = ctx.player.userId;
       const gid = ctx.group.groupId;
@@ -165,7 +165,7 @@ function main() {
       const ai = AIManager.getAI(sid);
 
       // 检查活跃时间定时器
-      ai.checkActiveTimer(ctx);
+      await ai.checkActiveTimer(ctx);
 
       const message = msg.message;
       const messageArray = transformTextToArray(message);

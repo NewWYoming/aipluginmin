@@ -64,6 +64,7 @@ export class AI {
     imagePool: ImagePool;
     setting: Setting;
     isChatting: boolean;
+    _lastCleanupDate: string;
 
     // 下面是临时变量，用于处理消息
     bucket: { // 触发次数令牌桶
@@ -227,7 +228,14 @@ export class AI {
         return Math.floor(nextTime.getTime() / 1000);
     }
 
-    checkActiveTimer(ctx: seal.MsgContext) {
+    async checkActiveTimer(ctx: seal.MsgContext) {
+        // 每天 0 点清理印象
+        const today = new Date().toDateString();
+        if (today !== this._lastCleanupDate) {
+            this._lastCleanupDate = today;
+            await this.memory.cleanupImpressions(ctx, this);
+        }
+
         const { segs, start, end } = this.setting.activeTimeInfo;
         if (segs !== 0 && (start !== 0 || end !== 0)) {
             const timers = TimerManager.getTimers(this.id, '', ['activeTime']);

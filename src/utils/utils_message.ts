@@ -8,7 +8,7 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
     const { systemMessageTemplate, isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;
     const { isTool } = ConfigManager.tool;
     const { receiveImage, condition } = ConfigManager.image;
-    const { isMemory, isShortMemory } = ConfigManager.memory;
+    const { isMemory } = ConfigManager.memory;
 
     // 角色设定
     const { roleIndex, roleSetting } = getRoleSetting(ctx);
@@ -35,8 +35,8 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
     const knowledgePrompt = await knowledgeMM.buildKnowledgeMemoryPrompt(roleIndex, text, ui, gi);
     // 记忆
     const memoryPrompt = isMemory ? await ai.memory.buildMemoryPrompt(ctx, ai.context, text, ui, gi) : '';
-    // 短期记忆
-    const shortMemoryPrompt = isShortMemory && ai.memory.useShortMemory ? ai.memory.shortMemoryList.map((item, index) => `${index + 1}. ${item}`).join('\n') : '';
+    // 印象层
+    const impressionText = ai.memory.buildImpressionPrompt(ctx, ai.context);
     const content = systemMessageTemplate({
         "角色设定": roleSetting,
         "平台": ctx.endPoint.platform,
@@ -54,8 +54,7 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
         "知识库": knowledgePrompt,
         "开启长期记忆": isMemory && memoryPrompt,
         "记忆信息": memoryPrompt,
-        "开启短期记忆": isShortMemory && ai.memory.useShortMemory && shortMemoryPrompt,
-        "短期记忆信息": shortMemoryPrompt
+        "印象层": impressionText,
     });
 
     const systemMessage: Message = {
