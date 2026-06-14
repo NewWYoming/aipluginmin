@@ -37,15 +37,6 @@ export function registerCmdMemory() {
                     clear: { priv: U }
                 }
             },
-            short: {
-                priv: S, args: {
-                    list: { priv: U },
-                    clear: { priv: U },
-                    on: { priv: U },
-                    off: { priv: U }
-                }
-            },
-            sum: { priv: U }
         }
     };
     cmd.solve = async (scc: SubCmdContext) => {
@@ -62,13 +53,11 @@ export function registerCmdMemory() {
                 if (cmdArgs.at.length > 0 && (cmdArgs.at.length !== 1 || cmdArgs.at[0].userId !== epId)) {
                     ai3 = ai2;
                 }
-                const { isMemory, isShortMemory } = ConfigManager.memory;
+                const { isMemory } = ConfigManager.memory;
                 seal.replyToSender(ctx, msg, `${ai3.id}
      长期记忆开启状态: ${isMemory ? '是' : '否'}
      长期记忆条数: ${ai3.memory.memoryIds.length}
-     关键词库: ${ai3.memory.keywords.join('、') || '无'}
-     短期记忆开启状态: ${(isShortMemory && ai3.memory.useShortMemory) ? '是' : '否'}
-     短期记忆条数: ${ai3.memory.shortMemoryList.length}`);
+     关键词库: ${ai3.memory.keywords.join('、') || '无'}`);
                 return ret;
             }
             case 'private': {
@@ -214,66 +203,15 @@ export function registerCmdMemory() {
                     }
                 }
             }
-            case 'short': {
-                const val3 = cmdArgs.getArgN(3);
-                switch (aliasToCmd(val3)) {
-                    case 'on': {
-                        ai.memory.useShortMemory = true;
-                        seal.replyToSender(ctx, msg, '短期记忆已开启');
-                        AIManager.saveAI(sid);
-                        return ret;
-                    }
-                    case 'off': {
-                        ai.memory.useShortMemory = false;
-                        seal.replyToSender(ctx, msg, '短期记忆已关闭');
-                        AIManager.saveAI(sid);
-                        return ret;
-                    }
-                    case 'list': {
-                        if (ai.memory.shortMemoryList.length === 0) {
-                            seal.replyToSender(ctx, msg, '短期记忆为空');
-                            return ret;
-                        }
-                        seal.replyToSender(ctx, msg, ai.memory.shortMemoryList
-                            .map((item, index) => `${index + 1}. ${item}`)
-                            .slice((page - 1) * 10, page * 10)
-                            .join('\n') + `\n当前页码: ${page}/${Math.ceil(ai.memory.shortMemoryList.length / 10)}`);
-                        return ret;
-                    }
-                    case 'clear': {
-                        ai.memory.clearShortMemory();
-                        seal.replyToSender(ctx, msg, '短期记忆已清除');
-                        AIManager.saveAI(sid);
-                        return ret;
-                    }
-                    default: {
-                        seal.replyToSender(ctx, msg, `参数缺失
-     【.ai memo short list】展示短期记忆
-     【.ai memo short clr】清除短期记忆
-     【.ai memo short [on/off]】开启/关闭短期记忆`);
-                        return ret;
-                    }
-                }
-            }
-            case 'sum': {
-                ai.context.summaryCounter = 0;
-                await ai.memory.updateShortMemory(ctx, msg, ai)
-                seal.replyToSender(ctx, msg, ai.memory.shortMemoryList
-                    .map((item, index) => `${index + 1}. ${item}`)
-                    .slice((page - 1) * 10, page * 10)
-                    .join('\n') + `\n当前页码: ${page}/${Math.ceil(ai.memory.shortMemoryList.length / 10)}`);
-                return ret;
-            }
+            
             default: {
                 seal.replyToSender(ctx, msg, `帮助:
      【.ai memo status (@xxx)】查看记忆状态，@为查看个人记忆状态
      【.ai memo [p/g] st <内容>】设置个人/群聊设定
      【.ai memo [p/g] st clr】清除个人/群聊设定
      【.ai memo [p/g] del <ID1> <ID2> --关键词1 --关键词2】删除个人/群聊记忆
-     【.ai memo [p/g/short] list】展示个人/群聊/短期记忆
-     【.ai memo [p/g/short] clr】清除个人/群聊/短期记忆
-     【.ai memo short [on/off]】开启/关闭短期记忆
-     【.ai memo sum】立即总结一次短期记忆`);
+     【.ai memo [p/g] list】展示个人/群聊记忆
+     【.ai memo [p/g] clr】清除个人/群聊记忆`);
                 return ret;
             }
         }
