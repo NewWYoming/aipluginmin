@@ -30,14 +30,6 @@ ID:上面是分割符
         seal.ext.registerBoolConfig(MemoryConfig.ext, "是否启用长期记忆", true, "");
         seal.ext.registerIntConfig(MemoryConfig.ext, "长期记忆上限", 50, "");
         seal.ext.registerIntConfig(MemoryConfig.ext, "长期记忆展示数量", 5, "");
-        seal.ext.registerBoolConfig(MemoryConfig.ext, "长期记忆是否启用向量", false, "");
-        seal.ext.registerIntConfig(MemoryConfig.ext, "向量维度", 1024, "");
-        seal.ext.registerStringConfig(MemoryConfig.ext, "嵌入url地址", "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings", '');
-        seal.ext.registerStringConfig(MemoryConfig.ext, "嵌入API Key", "你的API Key", '');
-        seal.ext.registerTemplateConfig(MemoryConfig.ext, "嵌入body", [
-            `"model":"text-embedding-v4"`,
-            `"encoding_format":"float"`
-        ], "input, dimensions不存在时，将会自动替换。具体参数请参考你所使用模型的接口文档");
         seal.ext.registerTemplateConfig(MemoryConfig.ext, "长期记忆展示模板", [
             `{{#if 私聊}}
 ### 关于用户<{{{用户名称}}}>{{#if 展示号码}}({{{用户号码}}}){{/if}}:
@@ -75,11 +67,6 @@ ID:上面是分割符
             isMemory: seal.ext.getBoolConfig(MemoryConfig.ext, "是否启用长期记忆"),
             memoryLimit: seal.ext.getIntConfig(MemoryConfig.ext, "长期记忆上限"),
             memoryShowNumber: seal.ext.getIntConfig(MemoryConfig.ext, "长期记忆展示数量"),
-            isMemoryVector: seal.ext.getBoolConfig(MemoryConfig.ext, "长期记忆是否启用向量"),
-            embeddingDimension: seal.ext.getIntConfig(MemoryConfig.ext, "向量维度"),
-            embeddingUrl: seal.ext.getStringConfig(MemoryConfig.ext, "嵌入url地址"),
-            embeddingApiKey: seal.ext.getStringConfig(MemoryConfig.ext, "嵌入API Key"),
-            embeddingBodyTemplate: seal.ext.getTemplateConfig(MemoryConfig.ext, "嵌入body"),
             memoryShowTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "长期记忆展示模板"),
             memorySingleShowTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "单条长期记忆展示模板"),
             maxObservedMessages: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大观察消息数"),
