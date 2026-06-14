@@ -215,6 +215,7 @@ final_score = 0.7 × LLM 评分 + 0.3 × base_score
 | 新近度 | 无 | exp 指数衰减 |
 | 重要性 | 无 | 1/3/5 三级 |
 | 精排 | 无 | LLM 重排 top 20 |
+| 关键词提权 | `weight += 10`（暴力提权） | 纳入 Jaccard 分数中，不再变更 weight |
 
 ### 4. POV 过滤（新增）
 
@@ -256,6 +257,7 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 | `Math.max(10, w+i)` → `Math.min(10, w+i)` | memory.ts:451 |
 | `Math.min(0, w-d)` → `Math.max(0, w-d)` | memory.ts:454 |
 | `limitMemory` 移到 `memoryMap[id]=m` 之后 | memory.ts:229-230 |
+| 记忆展示模板变量名不匹配：`{{{用户列表}}}` → `{{{相关用户}}}`，`{{{群聊列表}}}` → `{{{相关群聊}}}` | config_memory.ts:57 |
 
 ## 数据迁移
 
@@ -281,20 +283,134 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 
 ## 删除项
 
-| 删除 | 原因 |
+### 代码删除
+
+| 删除 | 位置 | 原因 |
+|------|------|------|
+| `shortMemoryList` + `limitShortMemory()` + `clearShortMemory()` + `updateShortMemory()` | memory.ts:148-155, 266-393 | 被观察缓存 + 印象层代替 |
+| `useShortMemory` 字段 | memory.ts, validKeys+构造 | 不再需要开关 |
+| `Context.summaryCounter` 字段 + validKeys | context.ts:33,43 | 仅用于短期记忆轮数计数 |
+| `context.ts:147-155` 短期记忆触发块 | context.ts | 被印象层阈值触发代替 |
+| `buildMemoryPrompt` 中遍历所有用户注入记忆 (553-567行) | memory.ts | POV 过滤禁止 |
+| `updateMemoryWeight` 旧逻辑 | memory.ts:443-456 | 修复 bug 后保留。weight 仍用于 `limitMemory()`(decay × weight)，但 `search()` 改用复合打分。`context.ts:159` 调用 `updateRelatedMemoryWeight` 保留。 |
+| `.ai memo short` 命令树 | cmd/sub_cmd/memory.ts:217-264 | 引用已删除功能 |
+| `buildSystemMessage` 中 `{{#if 开启短期记忆}}` 模板段 | utils_message.ts:39-44, config_message.ts:60-64 | 印象层代替 |
+| `sandableImagesPrompt` 模板变量（如果仍残留） | utils_message.ts | 图片重构时已清理，确认 |
+
+### 配置删除
+
+| 配置 key | 位置 | 原因 |
+|----------|------|------|
+| `是否启用短期记忆` (`isShortMemory`) | config_memory.ts | 不再需要 |
+| `短期记忆上限` (`shortMemoryLimit`) | config_memory.ts | 被 `maxObservedMessages` 代替 |
+| `短期记忆总结轮数` (`shortMemorySummaryRound`) | config_memory.ts | 被印象阈值触发代替 |
+| `记忆总结 url地址` + `记忆总结 API Key` + `记忆总结 body` + `记忆总结 prompt模板` | config_memory.ts | 仅用于 `updateShortMemory()`，一同删除 |
+
+## 新增配置
+
+| 配置 key | 类型 | 默认值 | 说明 |
+|----------|------|--------|------|
+| `观察缓存上限` | IntConfig | 10 | 等于 `maxObservedMessages` |
+| `印象最长天数` | IntConfig | 3 | 等于 `impressionMaxAge` |
+| `印象最大字数` | IntConfig | 80 | 等于 `impressionMaxLength` |
+| `清理沉默天数` | IntConfig | 30 | 等于 `cleanupInactiveDays` |
+
+## 跨模块变更清单
+
+### 必须同步修改的文件（除 memory.ts 外）
+
+| 文件 | 变更 |
 |------|------|
-| `shortMemoryList` + `limitShortMemory` + `clearShortMemory` + `updateShortMemory` | 被观察缓存 + 印象层代替 |
-| `buildMemoryPrompt` 中遍历所有用户注入记忆 | POV 过滤禁止 |
-| `updateMemoryWeight` 旧逻辑 | 不再依赖 weight 字段做核心排序 |
-| 短期记忆相关配置 `shortMemoryLimit`、`shortMemorySummaryRound` | 被 `maxObservedMessages`、`impressionMaxAge` 代替 |
+| `src/AI/context.ts` | 删除 `summaryCounter` validKeys+字段；删除 `updateShortMemory` 调用；替换为印象层 Tier 1 收集逻辑；`updateRelatedMemoryWeight` 保留但简化（仅做关键词匹配提权，不再主导排序） |
+| `src/AI/AI.ts` | 删除 `reply()` 中随机发图引用（如未清理）；印象清理通过 `checkActiveTimer` 或新 timer 触发 |
+| `src/utils/utils_message.ts` | 删除短期记忆相关模板变量 (`isShortMemory`, `shortMemoryList`)；新增印象层模板变量 (`impressions`) |
+| `src/config/config_message.ts` | 删除 `{{#if 开启短期记忆}}` 模板段；新增印象层模板段（在长期记忆之前） |
+| `src/config/config_memory.ts` | 删除 6 个短期记忆相关 config key；新增 4 个印象层 config key；更新 `get()` 返回值 |
+| `src/cmd/sub_cmd/memory.ts` | 删除 `case 'short':` 和 `case 'sum':` 块；更新 help 文本 |
+| `src/tool/tool_memory.ts` | `add_memory` 参数新增可选 `importance` (1/3/5) 和 `scope`（自动从 `memory_type` 推导）；`del_memory` 不变 |
+
+### validKeys 更新
+
+| 类 | 新增 | 删除 |
+|-----|------|------|
+| `Memory` | `'scope'`, `'witnesses'`, `'importance'` | — |
+| `MemoryManager` | `'impressions'`, `'observations'` | `'useShortMemory'`, `'shortMemoryList'` |
+| `Context` | — | `'summaryCounter'` |
+
+### 模板变量变更
+
+| 变量 | 旧来源 | 新处理 |
+|------|--------|--------|
+| `开启短期记忆` | `isShortMemory` config | **删除** |
+| `短期记忆信息` | `shortMemoryList.join()` | **删除** |
+| `可发送图片不为空` | `sandableImagesPrompt` | （图片重构时已清理，确认） |
+| `印象层` | 无 | **新增**：`impressions` map → 拼接文本 |
+
+### add_memory 工具 API 变更
+
+```typescript
+// tool_memory.ts — add_memory 参数扩展
+parameters: {
+  type: 'object',
+  properties: {
+    text: { type: 'string', description: '记忆内容' },
+    memory_type: { type: 'string', enum: ['private', 'group'] },
+    keywords: { type: 'array', items: { type: 'string' } },
+    importance: { type: 'number', enum: [1, 3, 5], description: '重要性: 5=核心, 3=一般, 1=琐碎', default: 3 },
+    // scope 自动从 memory_type 推导: private→'private', group→'group'
+  }
+}
+```
+
+### LLM 精排集成方式
+
+`search()` 保持同步（不做异步 LLM 调用）。精排作为 `search()` 的**后处理步骤**，在 `buildMemoryPrompt` 中调用：
+
+```
+search() → 返回 preScore top 20 → buildMemoryPrompt 中调用 async llmRerank()
+  → 返回 final top-K → 注入
+```
+
+若 `memoryShowNumber` ≤ 5 → 跳过 LLM 精排，直接注入（省 API 调用）。
+
+### 印象清理定时器
+
+借助现有 `TimerManager` 或 `AI.checkActiveTimer`：
+
+```
+每天 0 点:
+  群聊 AI 实例:
+    1. 获取当前群成员列表（SeaDice API）
+    2. impressions 中 uid 不在成员列表 → 删除印象 + observations
+    3. observations[uid].lastSpeak 超过 cleanupInactiveDays → 删除印象 + observations
+  私聊 AI 实例: 跳过
+```
+
+## 数据迁移补充
+
+### 旧数据丢弃
+
+以下字段从 `validKeys` 移除后，再次 `storageSet` 时将不再序列化，旧数据隐形丢弃：
+- `MemoryManager.useShortMemory` + `MemoryManager.shortMemoryList`
+- `Context.summaryCounter`
+
+这些数据本身不参与未来逻辑，丢弃是安全的、预期的。
+
+### KnowledgeMemoryManager
+
+知识库记忆的 scope 统一设置为 `'universal'`（跨场景可见），不受 POV 过滤限制。`knowledgeMM.search()` 无需修改。
 
 ## 自检清单
 
 - [ ] 无 TBD/TODO，所有参数有默认值
 - [ ] Bug 修复与功能改进分阶段，互不阻塞
 - [ ] 旧记忆数据零丢失（自动推断 scope/importance 默认值）
+- [ ] 旧短期记忆/impression 数据丢弃是预期的（validKeys 移除）
 - [ ] 群聊不再注入用户私人记忆（POV 过滤）
 - [ ] 新用户默认无印象，空印象不注入上下文
 - [ ] 每天 0 点清理长期沉默用户和已退群用户的印象数据
 - [ ] 复合打分不需要向量数据库
 - [ ] LLM 精排可选关闭（`memoryShowNumber` ≤ 5 时直接注入，不调精排）
+- [ ] 所有跨模块引用已更新（context.ts, utils_message.ts, config_message.ts, config_memory.ts, cmd/sub_cmd/memory.ts, tool_memory.ts）
+- [ ] 所有 validKeys 已更新（Memory, MemoryManager, Context）
+- [ ] 系统消息模板已添加印象层、删除短期记忆段
