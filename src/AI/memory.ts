@@ -265,7 +265,7 @@ export class MemoryManager {
         await m.updateVector();
         this.memoryMap[id] = m;
         this.limitMemory();
-        logger.info(`新记忆已创建: id=${id}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
+        logger.info(`新记忆已创建: id=${id}, scope=${m.scope}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
     }
 
     deleteMemory(ids: string[] = [], kws: string[] = []) {
