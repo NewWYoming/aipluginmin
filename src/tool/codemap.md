@@ -24,7 +24,8 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_render.ts` | `render_markdown`, `render_html` | Content→image rendering |
 | `tool_voice.ts` | `record`, `text_to_sound` | Voice / TTS |
 | `tool_music.ts` | `music_play` | Music search & play |
-| `tool_web.ts` | `web_search`, `web_read` | Web search & scraping |
+| `tool_web.ts` | `web_search`, `web_read` | Web search (Jina primary + SearXNG fallback) & scraping (Jina Reader) |
+| `tool_alias.ts` | `edit_alias` | User alias mapping (add/delete) |
 | `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers |
 | `tool_ban.ts` | `ban`, `whole_ban`, `get_ban_list` | QQ group mute |
 | `tool_rename.ts` | `rename` | Group nickname |
@@ -36,7 +37,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_context.ts` | `get_context` | Conversation context inspection |
 | `tool_trigger.ts` | `set_trigger_condition` | Proactive trigger conditions |
 
-Total: **~41 tools** across **22 files** (20 tool files + tool.ts + sample.ts).
+Total: **~42 tools** across **23 files** (21 tool files + tool.ts + sample.ts).
 
 ---
 
@@ -51,7 +52,8 @@ ToolManager.registerTool()
   ├─ registerMemory()    → tool_memory.ts
   ├─ registerDeck()      → tool_deck.ts
   ├─ registerJrrp()      → tool_jrrp.ts
-  ├─ ... (20 more)
+  ├─ registerAlias()     → tool_alias.ts
+  ├─ ... (21 more)
   └─ registerRender()    → tool_render.ts
 ```
 
@@ -154,7 +156,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **`src/logger.ts`** — logger | Imported by many tools | Structured logging |
 | **SeaDice Runtime** — `seal.ext`, `seal.deck`, `seal.vars`, `seal.replyToSender`, `seal.setPlayerGroupCard`, `seal.format`, `seal.base64ToImage` | Used via global scope | Native dice bot extension system, deck drawing, variable CRUD, message sending |
 | **OB11 / OneBot v11** — via `utils_ob11.ts` | Indirect via util functions | HTTP-based QQ bot protocol for group management, messaging, TTS |
-| **External APIs** — web search endpoint, render endpoint, music search APIs | Direct fetch calls in tool_web.ts, tool_render.ts, tool_music.ts | Backend services configured via `ConfigManager.backend` |
+| **External APIs** — Jina Search (POST s.jinaai.cn), Jina Reader (r.jinaai.cn), SearXNG (fallback), render endpoint, music search APIs | Direct fetch calls with retry/caching in tool_web.ts, tool_render.ts, tool_music.ts | Backend services configured via `ConfigManager.backend` (jinaApiKey, webSearchUrl, webReadUrl) |
 
 ---
 
@@ -165,6 +167,6 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **Standalone** (no ext/network) | `get_time`, `list_decks`/`draw_deck`, `search_memory`, `add_memory`, `del_memory`, `clear_memory`, `get_context`, `list_images`, `send_image` | AI instance only |
 | **Extension-delegated** (via `extensionSolve`) | `attr_show`, `attr_get`, `attr_set`, `jrrp`, `roll_check`, `san_check`, `modu_roll`, `modu_search` | SeaDice extension commands |
 | **OB11 network** (group admin) | `ban`, `whole_ban`, `get_ban_list`, `rename`, `group_sign`, `get_person_info`, `get_list`, `get_group_member_list`, `search_chat`, `search_common_group`, `get_msg`, `delete_msg`, `send_forward_msg`, `set_essence_msg`, `get_essence_msg_list`, `delete_essence_msg`, `text_to_sound` (non-custom) | `utils_ob11.ts` |
-| **External HTTP** | `web_search`, `web_read`, `music_play`, `render_markdown`, `render_html` | Backend services |
+| **External HTTP** | `web_search`, `web_read`, `music_play`, `render_markdown`, `render_html` | Backend services (Jina API / SearXNG / dedicated services) |
 | **Plugin-dependent** | `text_to_image`, `text_to_sound` (custom mode) | `AIDrawing` / `AITTS` plugins |
 | **Cross-session** (switches AI context) | `send_msg`, `get_context`, `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Uses `AIManager.getAI()` + `getCtxAndMsg()` |

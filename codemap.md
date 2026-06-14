@@ -20,7 +20,7 @@
 | `src/config/` | SeaDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
 | `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
 | `src/service/providers/` | Provider pattern for LLM backends: DeepSeek V4 (thinking mode), OpenAI-compatible generic | [📄](src/service/providers/codemap.md) |
-| `src/tool/` | AI function-calling tools: ~41 tools across COC/TRPG, memory, image, messaging, utility domains | [📄](src/tool/codemap.md) |
+| `src/tool/` | AI function-calling tools: ~42 tools across COC/TRPG, memory, alias, image, messaging, utility domains | [📄](src/tool/codemap.md) |
 | `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management | [📄](src/cmd/codemap.md) |
 | `src/cmd/sub_cmd/` | Individual subcommand implementations (17 commands) | [📄](src/cmd/sub_cmd/codemap.md) |
 | `src/utils/` | Shared utilities: string parsing, message formatting, OB11 bridge, SealDice helpers | [📄](src/utils/codemap.md) |

@@ -26,8 +26,8 @@ Each feature area has a dedicated file with a class that follows a uniform inter
 | `config_received.ts` | `ReceivedConfig` | `aiplugin4_3:消息接收与触发` | Trigger conditions, ignore patterns, rate limits |
 | `config_reply.ts` | `ReplyConfig` | `aiplugin4_4:回复` | Reply filtering, anti-repeat, regex processing |
 | `config_image.ts` | `ImageConfig` | `aiplugin4_5:图片` | Image recognition, storage, sending |
-| `config_backend.ts` | `BackendConfig` | `aiplugin4_6:后端` | External service URLs (stream, search, render) |
-| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory, knowledge base, embeddings, impressions |
+| `config_backend.ts` | `BackendConfig` | `aiplugin4_6:后端` | External service URLs (stream, search, render, Jina API Key) |
+| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory, knowledge base, impressions (vector/embedding config removed) |
 | `sample.ts` | `SampleConfig` | `aiplugin4_0:示例` | Reference example (disabled in production) |
 
 Each class has:
@@ -74,8 +74,8 @@ Plugin startup (src/index.ts → main())
        ├─ ReceivedConfig.register()      → creates "aiplugin4_3:消息接收与触发" ext, registers ~8 keys
        ├─ ReplyConfig.register()         → creates "aiplugin4_4:回复" ext, registers ~6 keys
        ├─ ImageConfig.register()         → creates "aiplugin4_5:图片" ext, registers ~9 keys
-       ├─ BackendConfig.register()       → creates "aiplugin4_6:后端" ext, registers 6 keys
-       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers ~17 keys
+       ├─ BackendConfig.register()       → creates "aiplugin4_6:后端" ext, registers 7 keys (added jinaApiKey)
+       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers ~12 keys (5 vector keys removed)
        └─ SampleConfig.register()        → creates "aiplugin4_0:示例" ext, registers 1 key
 
 Runtime access (any module):
