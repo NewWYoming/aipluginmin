@@ -75,7 +75,7 @@ export function registerWeb() {
                     return { content: cached.content, images: [] };
                 }
 
-                const jinaUrl = 'https://s.jina.ai/';
+                const jinaUrl = 'https://s.jinaai.cn/';
                 const headers: Record<string, string> = {
                     'Authorization': `Bearer ${jinaApiKey}`,
                     'Content-Type': 'application/json',
@@ -190,7 +190,7 @@ export function registerWeb() {
         }
 
         try {
-            const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+            const jinaUrl = `https://r.jinaai.cn/${encodeURIComponent(url)}`;
             const headers: Record<string, string> = {
                 'Accept': 'text/markdown'
             };
