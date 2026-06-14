@@ -61,6 +61,7 @@ ID:上面是分割符
         ], "");
         // 印象层配置
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大观察消息数", 10, "连续收集多少条用户消息后自动生成印象");
+        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最长天数", 3, "印象超过此天数未更新则触发刷新");
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大长度", 80, "印象文字最大字符数");
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·清理未活跃天数", 30, "超过此天数未发言的用户印象将被清理");
 
@@ -82,6 +83,7 @@ ID:上面是分割符
             memoryShowTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "长期记忆展示模板"),
             memorySingleShowTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "单条长期记忆展示模板"),
             maxObservedMessages: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大观察消息数"),
+            impressionMaxAge: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最长天数"),
             impressionMaxLength: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大长度"),
             cleanupInactiveDays: seal.ext.getIntConfig(MemoryConfig.ext, "印象·清理未活跃天数"),
         }

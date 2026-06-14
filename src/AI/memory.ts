@@ -588,6 +588,7 @@ export class MemoryManager {
 
       // 尝试获取当前群成员列表
       const memberIds = new Set<string>();
+      let memberListFetched = false;
       try {
         const { getGroupMemberList } = require('../utils/utils_ob11');
         const { netExists } = require('../utils/utils_ob11');
@@ -595,18 +596,20 @@ export class MemoryManager {
           const gid = (ctx as any).group?.groupId?.replace(/^.+:/, '') || '';
           const members = await getGroupMemberList((ctx as any).endPoint?.userId, gid);
           if (members && Array.isArray(members)) {
+            memberListFetched = true;
             for (const m of members) {
               memberIds.add('QQ:' + (m.user_id || ''));
             }
           }
         }
-      } catch { /* 获取失败跳过，仍然清理超时用户 */ }
+      } catch { /* 获取失败跳过 */ }
 
       for (const uid of Object.keys(this.observations)) {
         const obs = this.observations[uid];
         const silentDays = (now - obs.lastSpeak) / 86400;
 
-        if (!memberIds.has(uid) || silentDays > inactiveDays) {
+        const notInGroup = memberListFetched && !memberIds.has(uid);
+        if (notInGroup || silentDays > inactiveDays) {
           delete this.impressions[uid];
           delete this.observations[uid];
           logger.info('印象清理: ' + uid);
@@ -679,9 +682,10 @@ export class MemoryManager {
         );
 
         if (ctx.isPrivate) {
-            // Private chat: user's private memories
+            // Private chat: user's private memories (POV filtered)
             const userAI = AIManager.getAI(ctx.player.userId);
-            const scored = await userAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
+            const userFiltered = userAI.memory.getPOVFilteredMemories('private', ctx.player.userId);
+            const scored = await userAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, userFiltered);
             return s + userAI.memory.buildMemory(
                 { isPrivate: true, id: ctx.player.userId, name: ctx.player.name },
                 scored
@@ -689,7 +693,8 @@ export class MemoryManager {
         } else {
             // Group chat: group memories ONLY. No per-user private memory injection!
             const groupAI = AIManager.getAI(ctx.group.groupId);
-            const scored = await groupAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
+            const groupFiltered = groupAI.memory.getPOVFilteredMemories('group', ctx.group.groupId);
+            const scored = await groupAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, groupFiltered);
             return s + groupAI.memory.buildMemory(
                 { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName },
                 scored
