@@ -37,6 +37,8 @@ export class RequestConfig {
     seal.ext.registerOptionConfig(RequestConfig.ext, '工具阶段推理强度', 'minimal', [
       'minimal', 'low', 'medium',
     ], '工具调用时的推理深度');
+
+    seal.ext.registerStringConfig(RequestConfig.ext, '记忆辅助模型', 'deepseek-chat', '印象生成和记忆精排使用的模型，建议用便宜的 chat/flash 模型');
   }
 
   static get() {
@@ -86,6 +88,7 @@ export class RequestConfig {
       reasoningEffort: seal.ext.getOptionConfig(RequestConfig.ext, '回复推理强度'),
       toolThinkingEnabled: seal.ext.getBoolConfig(RequestConfig.ext, '工具阶段启用思考'),
       toolReasoningEffort: seal.ext.getOptionConfig(RequestConfig.ext, '工具阶段推理强度'),
+      memoryModel: seal.ext.getStringConfig(RequestConfig.ext, '记忆辅助模型'),
       temperature,
       topP,
       extraBody,
