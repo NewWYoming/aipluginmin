@@ -18,7 +18,7 @@ export interface searchOptions {
 }
 
 export class Memory {
-    static validKeys: (keyof Memory)[] = ['id', 'vector', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
+    static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
     id: string; // 记忆ID
     vector: number[]; // 记忆向量
     text: string; // 记忆内容
@@ -134,7 +134,6 @@ export class Memory {
     async updateVector() {
         const { isMemoryVector, embeddingDimension } = ConfigManager.memory;
         if (isMemoryVector) {
-            logger.info(`更新记忆向量: ${this.id}`);
             const vector = await getEmbedding(this.text);
             if (!vector.length) {
                 logger.error('返回向量为空');
@@ -186,6 +185,7 @@ export class MemoryManager {
         }
         if (hasOldFormat) {
             this.memoryMap = {};
+            (this as any)._needsSave = true;
             logger.info('检测到旧格式记忆（无 scope 字段），已清空。新记忆将使用新格式。');
             return;
         }
@@ -262,7 +262,10 @@ export class MemoryManager {
         m.scope = ctx.isPrivate ? 'private' : 'group';
         m.importance = importance;
         m.images = images;
-        await m.updateVector();
+        const { isMemoryVector } = ConfigManager.memory;
+        if (isMemoryVector) {
+            await m.updateVector();
+        }
         this.memoryMap[id] = m;
         this.limitMemory();
         logger.info(`新记忆已创建: id=${id}, scope=${m.scope}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
@@ -325,7 +328,7 @@ export class MemoryManager {
             }
             await Promise.all(this.memoryList.map(async m => {
                 if (m.vector.length !== embeddingDimension) {
-                    logger.info('记忆向量维度不匹配，重新获取向量: ' + m.id);
+                    logger.warning('记忆向量维度不匹配，重新获取向量: ' + m.id);
                     await m.updateVector();
                 }
             }));
@@ -523,7 +526,6 @@ export class MemoryManager {
         return this.memoryList.filter(m => {
             if (m.scope === 'universal') return true;
             if (m.scope === currentScope && m.sessionInfo.id === currentSessionId) return true;
-            if (m.scope === 'private' && m.sessionInfo.id === currentSessionId) return true;
             return false;
         });
     }
