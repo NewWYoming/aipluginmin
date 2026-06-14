@@ -41,6 +41,7 @@ export class Context {
         this.messages = [];
         this.ignoreList = [];
         this.aliases = {};
+        this.autoNameMod = 0;
         this.lastReply = '';
         this.counter = 0;
         this.timer = null;
@@ -491,12 +492,12 @@ export class Context {
                 const memberInfo = await getGroupMemberInfo(epId, gid.replace(/^.+:/, ''), uid.replace(/^.+:/, ''));
                 if (!memberInfo) {
                     logger.warning(`获取用户<${uid}>的群成员信息失败，尝试使用昵称`);
-                    this.setName(epId, gid, uid, 'nickname');
+                    await this.setName(epId, gid, uid, 'nickname');
                     break;
                 }
                 name = memberInfo.card || memberInfo.nickname;
                 if (!name) {
-                    this.setName(epId, gid, uid, 'nickname');
+                    await this.setName(epId, gid, uid, 'nickname');
                     return;
                 }
                 break;
@@ -509,6 +510,13 @@ export class Context {
         const { ctx } = getCtxAndMsg(epId, uid, gid);
         ctx.player.name = name;
         this.messages.forEach(message => message.name = message.uid === uid ? name : message.name);
+
+        // Register updated name as alias
+        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
+        if (!this.aliases[uid].names.includes(name)) {
+            this.aliases[uid].names.push(name);
+        }
+        this.aliases[uid].lastUsed[name] = Math.floor(Date.now() / 1000);
     }
 
     async updateName(epId: string, gid: string, uid: string) {
