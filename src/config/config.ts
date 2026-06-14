@@ -1,4 +1,4 @@
-﻿export const VERSION = "5.0.47";
+﻿export const VERSION = "5.0.48";
 export const AUTHOR = "baiyu&错误&NorthWyoming";
 export const NAME = "aiplugin4";
 
