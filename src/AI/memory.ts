@@ -258,6 +258,7 @@ export class MemoryManager {
         m.lastMentionTime = now;
         m.keywords = kws;
         m.weight = 5;
+        m.scope = ctx.isPrivate ? 'private' : 'group';
         m.importance = importance;
         m.images = images;
         await m.updateVector();
@@ -458,17 +459,50 @@ export class MemoryManager {
     }
 
     /** 获取相关记忆（复合打分 + LLM 精排） */
-    async getRelevantMemories(text: string, ui: UserInfo, gi: GroupInfo, topK: number): Promise<Memory[]> {
-        const candidates = await this.search(text, {
-            topK: 20,
-            userList: ui ? [ui] : [],
-            groupList: gi ? [gi] : [],
-            keywords: [],
-            includeImages: false,
-            method: 'score'
-        });
+    async getRelevantMemories(text: string, ui: UserInfo, gi: GroupInfo, topK: number, preFiltered?: Memory[]): Promise<Memory[]> {
+        let candidates: Memory[];
+        if (preFiltered) {
+            // Use pre-filtered list — apply composite scoring directly
+            candidates = MemoryManager.scoreCandidates(preFiltered, text);
+        } else {
+            candidates = await this.search(text, {
+                topK: 20,
+                userList: ui ? [ui] : [],
+                groupList: gi ? [gi] : [],
+                keywords: [],
+                includeImages: false,
+                method: 'score'
+            });
+        }
         if (topK <= 5) return candidates.slice(0, topK);  // 少时不调精排
         return await this.llmRerank(text, candidates, topK);
+    }
+
+    /** 对候选记忆列表应用复合评分（静态方法，可被 search 复用） */
+    private static scoreCandidates(candidates: Memory[], query: string): Memory[] {
+        const jaccard = (a: string[], b: string[]): number => {
+            const setA = new Set(a), setB = new Set(b);
+            const intersection = [...setA].filter(x => setB.has(x)).length;
+            const union = new Set([...setA, ...setB]).size;
+            return union === 0 ? 0 : intersection / union;
+        };
+        const tokenize = (s: string): string[] =>
+            s.split(/[\s,，。！？、；：""'']+/).filter(t => t.length > 0);
+        const now = Math.floor(Date.now() / 1000);
+
+        return candidates
+            .map(m => {
+                const kwJaccard = jaccard(tokenize(query), m.keywords);
+                const daysSinceCreate = (now - m.createTime) / 86400;
+                const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
+                const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
+                const baseScore = 0.50 * kwJaccard + 0.30 * recency + 0.20 * (importanceMap[m.importance] || 0.5);
+                (m as any)._baseScore = baseScore;
+                return m;
+            })
+            .filter((m: any) => m._baseScore > 0.1)
+            .sort((a: any, b: any) => b._baseScore - a._baseScore)
+            .slice(0, 20);
     }
 
     getPOVFilteredMemories(currentScope: string, currentSessionId: string): Memory[] {
@@ -631,10 +665,14 @@ export class MemoryManager {
 
     async buildMemoryPrompt(ctx: seal.MsgContext, context: Context, text: string, ui: UserInfo, gi: GroupInfo): Promise<string> {
         const { memoryShowNumber } = ConfigManager.memory;
+        const currentScope = ctx.isPrivate ? 'private' : 'group';
+        const currentSessionId = ctx.isPrivate ? ctx.player.userId : ctx.group.groupId;
 
         // Bot's own memories (universal + matching scope)
         const botAI = AIManager.getAI(ctx.endPoint.userId);
-        const scoredBot = await botAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber);
+        // POV filter: bot may have private + group memories; only inject relevant scope
+        const botFiltered = botAI.memory.getPOVFilteredMemories(currentScope, currentSessionId);
+        const scoredBot = await botAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, botFiltered);
         let s = botAI.memory.buildMemory(
             { isPrivate: true, id: ctx.endPoint.userId, name: seal.formatTmpl(ctx, '核心:骰子名字') },
             scoredBot

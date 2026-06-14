@@ -155,7 +155,7 @@ export class Context {
 
             const maxObserved = ConfigManager.memory.maxObservedMessages || 10;
             if (obs.rawMessages.length >= maxObserved) {
-                const updated = await ai.memory.updateImpression(uid);
+                await ai.memory.updateImpression(uid);
                 obs.rawMessages = [];
             }
         }
