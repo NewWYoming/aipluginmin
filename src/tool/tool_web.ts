@@ -30,6 +30,40 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
     throw new Error('unreachable');
 }
 
+// 带重试的 fetchJSON —— body 消费在重试循环内，解决 goproxy H2 EOF
+async function fetchJsonWithRetry(
+    url: string,
+    options: RequestInit = {},
+    retries = 2
+): Promise<{ data: any; resp: Response }> {
+    for (let i = 0; i <= retries; i++) {
+        let resp: Response;
+        try {
+            resp = await fetch(url, options);
+        } catch (e) {
+            if (i === retries) throw e;
+            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+            continue;
+        }
+
+        // 先消费 body（EOF 在这里触发则重试）
+        const text = await resp.text().catch((e: any) => {
+            throw new Error(`body read failed: ${e?.message || e}`);
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+        }
+
+        try {
+            return { data: JSON.parse(text), resp };
+        } catch (e: any) {
+            throw new Error(`JSON parse failed: ${e?.message || e}`);
+        }
+    }
+    throw new Error('unreachable');
+}
+
 export function registerWeb() {
     const toolSearch = new Tool({
         type: "function",
@@ -80,21 +114,15 @@ export function registerWeb() {
                 const headers: Record<string, string> = {
                     'Authorization': `Bearer ${jinaApiKey}`,
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Connection': 'close',
+                    'Accept': 'application/json'
                 };
 
                 logger.info(`使用Jina搜索: ${q}`);
-                const resp = await fetchWithRetry(jinaUrl, {
+                const { data } = await fetchJsonWithRetry(jinaUrl, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({ q })
                 });
-                if (!resp.ok) {
-                    const errBody = await resp.text().catch(() => '');
-                    throw new Error(`Jina HTTP ${resp.status}: ${errBody.slice(0, 200)}`);
-                }
-                const data = await resp.json();
 
                 const results = data?.data || [];
                 if (results.length === 0) return { content: `未搜索到结果`, images: [] };
@@ -194,17 +222,28 @@ export function registerWeb() {
         try {
             const jinaUrl = `https://r.jinaai.cn/${encodeURIComponent(url)}`;
             const headers: Record<string, string> = {
-                'Accept': 'text/markdown',
-                'Connection': 'close',
+                'Accept': 'text/markdown'
             };
             if (jinaApiKey) {
                 headers['Authorization'] = `Bearer ${jinaApiKey}`;
             }
 
             logger.info(`读取网页内容(Jina): ${url}`);
-            const resp = await fetchWithRetry(jinaUrl, { headers });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const content = await resp.text();
+
+            // 内联重试：body 消费在循环内，EOF 时重新 fetch
+            let content: string | undefined;
+            for (let attempt = 0; attempt <= 2; attempt++) {
+                try {
+                    const resp = await fetch(jinaUrl, { headers });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    content = await resp.text();
+                    break;
+                } catch (e: any) {
+                    if (attempt === 2) throw e;
+                    logger.warn(`Jina Reader 读取失败，重试 ${attempt + 1}/2: ${e?.message || e}`);
+                    await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                }
+            }
 
             if (!content || content.trim().length === 0) {
                 return { content: `未能从网页中提取到有效内容`, images: [] };
@@ -217,7 +256,6 @@ export function registerWeb() {
                 const oldest = [...pageCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0][0];
                 pageCache.delete(oldest);
             }
-
             return result;
         } catch (e: any) {
             logger.error('网页读取失败: ' + (e?.message || e));
