@@ -75,15 +75,19 @@ export function registerWeb() {
                     return { content: cached.content, images: [] };
                 }
 
-                const jinaUrl = `https://s.jina.ai/${encodeURIComponent(q)}`;
+                const jinaUrl = 'https://s.jina.ai/';
                 const headers: Record<string, string> = {
                     'Authorization': `Bearer ${jinaApiKey}`,
+                    'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 };
-                if (page && page > 1) headers['X-Page'] = String(page);
 
-                logger.info(`使用Jina搜索: ${jinaUrl}`);
-                const resp = await fetchWithRetry(jinaUrl, { headers });
+                logger.info(`使用Jina搜索: ${q}`);
+                const resp = await fetchWithRetry(jinaUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ q })
+                });
                 if (!resp.ok) throw new Error(`Jina HTTP ${resp.status}`);
                 const data = await resp.json();
 
