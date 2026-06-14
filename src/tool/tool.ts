@@ -7,6 +7,7 @@ import { registerImage } from "./tool_image"
 import { registerJrrp } from "./tool_jrrp"
 import { registerMemory } from "./tool_memory"
 import { registerModu } from "./tool_modu"
+import { registerAlias } from "./tool_alias"
 import { registerRename } from "./tool_rename"
 import { registerRollCheck } from "./tool_roll_check"
 import { registerTime } from "./tool_time"
@@ -189,6 +190,7 @@ export class ToolManager {
         registerJrrp();
         registerModu();
         registerRollCheck();
+        registerAlias();
         registerRename();
         registerAttr();
         registerBan();
