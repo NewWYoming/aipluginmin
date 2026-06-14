@@ -78,35 +78,114 @@ class Memory {
 | 3 | 一般信息 | 0.5 | 值得记住但非关键 |
 | 1 | 琐碎 | 0.2 | 聊到但不需要长期记的 |
 
-### 2. Impression（印象层，新增）
+### 2. Impression（印象层，三层增量架构）
+
+**设计原则**：不每次重写，而是攒够观察证据后才更新。参考 MumuBot、MaiBot 等行业实践。
+
+#### 数据结构
 
 ```typescript
-// 新增字段 (MemoryManager)
+// MemoryManager 新增字段
+interface UserObservation {
+  rawMessages: string[];     // 原始发言缓存，上限 maxObservedMessages 条
+  msgCount: number;          // 总发言数（累计，不清零）
+  lastSpeak: number;         // 最后发言时间戳（秒）
+  activity: number;          // 活跃度 0-1，EMA
+}
+
 interface Impression {
-  text: string;       // ≤100字，一句印象
-  updatedAt: number;  // 秒级时间戳
+  text: string;              // ≤80字，一句印象
+  updatedAt: number;         // 秒级时间戳
 }
 
 class MemoryManager {
   // ... 现有字段保留 ...
-  impressions: { [userId: string]: Impression };   // 新增
+  impressions: { [userId: string]: Impression };    // 新增：印象层
+  observations: { [userId: string]: UserObservation }; // 新增：观察缓存
   // 删除 shortMemoryList（被印象层代替）
 }
 ```
 
-**生成时机**：每 20 轮用户发言触发一次 `updateImpressions()`，异步调用 LLM。
+#### 配置参数
 
-**生成 prompt（简单格式）**：
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `maxObservedMessages` | 10 | 缓存上限，满了触发印象更新 |
+| `impressionMaxAge` | 3 天 | 印象超过此天数未更新即触发刷新 |
+| `impressionMaxLength` | 80 字 | 单条印象最大长度 |
+| `activityDecayRate` | 0.1/天 | 活跃度每日衰减量 |
+| `activityBoostPerMsg` | 0.05 | 每条消息活跃度增量 |
+
+#### Tier 1 — 静默收集（每条消息，零 LLM 成本，不抢回复触发）
+
 ```
-根据以下对话，为每个发言的用户生成一句简短印象（≤50字）。
-只描述性格特点、行为习惯、与他人的关系。不要描述具体事件。
+用户发言 → addMessage()
+  → observations[uid].rawMessages.push(发言内容)
+  → observations[uid].msgCount += 1
+  → observations[uid].lastSpeak = now()
+  → observations[uid].activity = min(1, activity + 0.05)  ← EMA 微调
+  → 日常衰减: max(0.1, activity - 0.1 * 距上次发言天数)
 
-对话: ...
-
-返回 JSON: {"impressions": {"用户ID": "印象文字", ...}}
+如果 rawMessages.length ≥ maxObservedMessages → 触发 Tier 2
 ```
 
-**与当前 shortMemoryList 的差异**：格式更简单（`{uid: text}` map），严格校验 type+length。
+#### Tier 2 — 攒够更新（阈值触发，1 次 LLM 调用）
+
+```
+触发条件（任一满足）:
+  A. rawMessages.length ≥ maxObservedMessages（默认 10 条）
+  B. 已有印象且 (now - impression.updatedAt) > impressionMaxAge（默认 3 天）
+
+触发动作:
+  1. 取出 rawMessages 和当前印象（可能为 null）
+  2. 调用 LLM 更新印象:
+
+     系统: 你正在根据最近的观察，更新对某个群友的简短印象。
+     当前印象: {旧印象 text，首次为 "无"}
+     最近观察:
+       {rawMessages 逐条列出}
+     
+     请用 ≤80 字更新印象。只描述性格特点、说话风格、行为习惯。
+     不要描述具体事件。如果初次观察，给出初次印象。
+     返回 JSON: {"impression": "印象文字"}
+
+  3. 存回 impressions[uid] = { text, updatedAt: now }
+  4. 清空 rawMessages = []
+```
+
+**关键差异 vs 原方案**：
+| 维度 | 原方案（每 20 轮批量重写） | 新方案（增量积累） |
+|------|--------------------------|-------------------|
+| 数据量 | 5-10 人 × 2-3 句 = 极稀 | 等攒够 10 句才处理 |
+| LLM 成本 | 频繁（每 20 轮一次全量） | 稀疏（阈值触发，单用户） |
+| 印象质量 | 浅层快照，下次可能丢失 | 基于累积观察提炼 |
+| 与回复触发冲突 | 可能抢在聊天中间触发 | addMessage 中判断，不额外延迟 |
+| 覆盖丢失 | 沉默 2 轮就丢了 | 持久保存，3 天内不退化 |
+
+#### 印象注入（始终）
+
+```
+buildSystemMessage 时:
+  遍历 context 中当前活跃的用户 → 取各用户的印象 → 拼接:
+  "Alice: 程序员，说话爱用梗，喜欢逗你\nBob: 沉默寡言，偶尔冒金句"
+  总长度 ≤ 300 tokens（≈ 8-10 条印象）
+```
+
+#### 活跃度衰减（后台）
+
+```
+// 在 AI.checkActiveTimer 或 getAI 时调用
+applyActivityDecay(observations) {
+  const now = Date.now() / 1000;
+  for (const uid of Object.keys(observations)) {
+    const obs = observations[uid];
+    const days = (now - obs.lastSpeak) / 86400;
+    obs.activity = Math.max(0.1, obs.activity - activityDecayRate * days);
+  }
+}
+```
+
+活跃度影响印象注入优先级：活跃度 < 0.2 的用户印象可被截断（为高活跃用户腾空间）。
 
 ### 3. 相关性打分（改进 MemoryManager.search）
 
@@ -194,7 +273,7 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 
 ### Phase 3（印象层）
 
-新字段 `impressions`，旧数据无此字段 → 首次触发 `updateImpressions` 时自动生成。
+新字段 `impressions` 和 `observations`，旧数据无此字段 → 首次用户发言时自动初始化空 `observations`，攒够 `maxObservedMessages` 条后触发首次印象生成。
 
 `shortMemoryList` 删除 → 旧短期记忆数据不再使用。
 
@@ -206,11 +285,10 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 
 | 删除 | 原因 |
 |------|------|
-| `shortMemoryList` + `limitShortMemory` + `clearShortMemory` | 被印象层代替 |
-| `updateShortMemory()` 复杂 JSON 解析 | 改为 `updateImpressions()` |
+| `shortMemoryList` + `limitShortMemory` + `clearShortMemory` + `updateShortMemory` | 被观察缓存 + 印象层代替 |
 | `buildMemoryPrompt` 中遍历所有用户注入记忆 | POV 过滤禁止 |
-| `updateMemoryWeight` 旧逻辑 → 新复合打分 | 不再依赖 weight 字段做核心排序 |
-| 短期记忆相关配置 `shortMemoryLimit`、`shortMemorySummaryRound` | 被印象更新频率代替 |
+| `updateMemoryWeight` 旧逻辑 | 不再依赖 weight 字段做核心排序 |
+| 短期记忆相关配置 `shortMemoryLimit`、`shortMemorySummaryRound` | 被 `maxObservedMessages`、`impressionMaxAge` 代替 |
 
 ## 自检清单
 
