@@ -15,3 +15,5 @@ dist/
 dist-backups/
 dev/
 docs/
+.playwright-mcp/
+.slim/
