@@ -90,11 +90,10 @@ interface UserObservation {
   rawMessages: string[];     // 原始发言缓存，上限 maxObservedMessages 条
   msgCount: number;          // 总发言数（累计，不清零）
   lastSpeak: number;         // 最后发言时间戳（秒）
-  activity: number;          // 活跃度 0-1，EMA
 }
 
 interface Impression {
-  text: string;              // ≤80字，一句印象
+  text: string;              // ≤80字，空串视为"无印象"
   updatedAt: number;         // 秒级时间戳
 }
 
@@ -106,6 +105,11 @@ class MemoryManager {
 }
 ```
 
+**印象规则**：
+- 新用户默认无印象（`impressions[uid]` 不存在）
+- 空印象（`text === ''` 或不存在）→ 不注入上下文
+- 只有非空印象才注入
+
 #### 配置参数
 
 | 参数 | 默认值 | 说明 |
@@ -113,8 +117,7 @@ class MemoryManager {
 | `maxObservedMessages` | 10 | 缓存上限，满了触发印象更新 |
 | `impressionMaxAge` | 3 天 | 印象超过此天数未更新即触发刷新 |
 | `impressionMaxLength` | 80 字 | 单条印象最大长度 |
-| `activityDecayRate` | 0.1/天 | 活跃度每日衰减量 |
-| `activityBoostPerMsg` | 0.05 | 每条消息活跃度增量 |
+| `cleanupInactiveDays` | 30 天 | 最后发言超过此天数 → 清理印象和观察数据 |
 
 #### Tier 1 — 静默收集（每条消息，零 LLM 成本，不抢回复触发）
 
@@ -123,8 +126,6 @@ class MemoryManager {
   → observations[uid].rawMessages.push(发言内容)
   → observations[uid].msgCount += 1
   → observations[uid].lastSpeak = now()
-  → observations[uid].activity = min(1, activity + 0.05)  ← EMA 微调
-  → 日常衰减: max(0.1, activity - 0.1 * 距上次发言天数)
 
 如果 rawMessages.length ≥ maxObservedMessages → 触发 Tier 2
 ```
@@ -166,26 +167,23 @@ class MemoryManager {
 
 ```
 buildSystemMessage 时:
-  遍历 context 中当前活跃的用户 → 取各用户的印象 → 拼接:
+  遍历 context 中当前活跃的用户 → 取各用户的印象 → 过滤:
+    - 印象为空（text === '' 或不存在）→ 跳过
+    - 印象非空 → 拼接:
   "Alice: 程序员，说话爱用梗，喜欢逗你\nBob: 沉默寡言，偶尔冒金句"
   总长度 ≤ 300 tokens（≈ 8-10 条印象）
 ```
 
-#### 活跃度衰减（后台）
+#### 印象清理（每天 0 点）
 
 ```
-// 在 AI.checkActiveTimer 或 getAI 时调用
-applyActivityDecay(observations) {
-  const now = Date.now() / 1000;
-  for (const uid of Object.keys(observations)) {
-    const obs = observations[uid];
-    const days = (now - obs.lastSpeak) / 86400;
-    obs.activity = Math.max(0.1, obs.activity - activityDecayRate * days);
-  }
-}
+定时触发（借助 timer 系统或 AI.checkActiveTimer）:
+  1. 已退群用户 → 删除印象 + observations
+     (对比当前群成员列表，印象中存在但成员列表中不存在的 uid)
+  2. 最后发言超过 cleanupInactiveDays（默认 30 天）→ 删除印象 + observations
 ```
 
-活跃度影响印象注入优先级：活跃度 < 0.2 的用户印象可被截断（为高活跃用户腾空间）。
+仅群聊 AI 实例执行清理——私聊 AI 实例跳过（私聊只有两个参与者，清理无意义）。
 
 ### 3. 相关性打分（改进 MemoryManager.search）
 
@@ -296,6 +294,7 @@ getPOVFilteredMemories(text, ui, gi, currentScope, currentSessionId) {
 - [ ] Bug 修复与功能改进分阶段，互不阻塞
 - [ ] 旧记忆数据零丢失（自动推断 scope/importance 默认值）
 - [ ] 群聊不再注入用户私人记忆（POV 过滤）
-- [ ] 印象层始终注入但极小（≤300 tokens）
+- [ ] 新用户默认无印象，空印象不注入上下文
+- [ ] 每天 0 点清理长期沉默用户和已退群用户的印象数据
 - [ ] 复合打分不需要向量数据库
 - [ ] LLM 精排可选关闭（`memoryShowNumber` ≤ 5 时直接注入，不调精排）
