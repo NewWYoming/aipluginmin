@@ -69,7 +69,7 @@ export function registerWeb() {
         type: "function",
         function: {
             name: "web_search",
-            description: `使用搜索引擎搜索`,
+            description: `使用搜索引擎搜索，返回标题、摘要和链接。支持10种分类(general/images/videos/news等)和时间范围过滤(day/week/month/year)。结果有15分钟缓存。`,
             parameters: {
                 type: "object",
                 properties: {

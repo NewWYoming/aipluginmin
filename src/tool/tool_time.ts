@@ -31,7 +31,7 @@ export function registerTime() {
                 properties: {
                     types: {
                         type: 'string',
-                        description: '定时器类型，target为目标时间，interval为间隔时间，对应下面的时间参数',
+                        description: '定时器类型。target: 在指定的绝对日期时间触发（年月日时分构成具体时刻）。interval: 每隔指定时长重复触发。',
                         enum: ['target', 'interval']
                     },
                     years: {
