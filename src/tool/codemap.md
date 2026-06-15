@@ -149,7 +149,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **`src/config/configManager.ts`** — `ConfigManager` | Imported by most tools | `ConfigManager.tool.*` (decks, bans, default-closed, maxCallCount, record paths, character), `ConfigManager.backend.*` (web URLs, render URL), `ConfigManager.message.*` (showNumber, isPrefix) |
 | **`src/utils/utils_seal.ts`** — `getCtxAndMsg` | Imported by several tools | Constructs temporary `MsgContext` for cross-session operations |
 | **`src/utils/utils_ob11.ts`** — OB11 network helpers | Imported by admin tools | `netExists`, `getGroupMemberInfo`, `setGroupBan`, `sendGroupAISound`, `getFriendList`, etc. |
-| **`src/utils/utils_string.ts`** — `fixJsonString`, `parseSpecialTokens`, etc. | Imported by tool.ts + tool_message.ts, tool_render.ts | JSON repair for malformed LLM output; content parsing |
+| **`src/utils/utils_string.ts`** — `fixJsonString`, `parseSpecialTokens`, `fmtDate` | Imported by tool.ts + tool_message.ts, tool_render.ts plus tool_essence_msg.ts, tool_ban.ts, tool_time.ts | JSON repair for malformed LLM output; content parsing; timezone-aware timestamp formatting |
 | **`src/utils/utils.ts`** — `generateId`, `replyToSender`, `transformMsgId` | Imported by tool_image.ts, tool_message.ts, tool_essence_msg.ts, tool_render.ts | ID generation, message sending, ID format conversion |
 | **`src/utils/utils_message.ts`** — `buildContent`, `handleReply`, `getRoleSetting` | Imported by tool_context.ts, tool_memory.ts, tool_message.ts | Message building helpers |
 | **`src/timer.ts`** — `TimerManager` | Imported by `tool_time.ts` | Timer CRUD operations |

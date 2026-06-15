@@ -82,7 +82,7 @@ All follow the same pattern: `getNet()` → `net.callApi(epId, action, params)` 
 | `parseSpecialTokens` | Lexes `<|tag:content|>` tokens from AI output strings. |
 | `filterString` | Splits text by `\f` separators and configurable regexes — each regex match can be rerouted through custom `contextTemplate`/`replyTemplate`. Enforced max-char truncation. |
 | `advancedSplit` | Splits a string on a regex while preserving the matched delimiters in the result array. |
-| `fmtDate` | Unix timestamp → `YYYY-MM-DD HH:mm:ss` format string. |
+| `fmtDate` | Unix timestamp → `YYYY-MM-DD HH:mm:ss` format string. `utcOffset` parameter (hours, default 0) uses `getUTC*()` with offset compensation to bypass goja UTC bug. |
 | `fixJsonString` | Tries to repair JSON missing leading double-quotes on keys/values (common with LLM output). Falls back to empty string on failure. |
 
 ### `utils_update.ts` — Version management
