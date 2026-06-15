@@ -619,7 +619,7 @@ export class MemoryManager {
                     return memorySingleShowTemplate({
                         "序号": i + 1,
                         "记忆ID": m.id,
-                        "记忆时间": fmtDate(m.createTime),
+                        "记忆时间": fmtDate(m.createTime, ConfigManager.message.utcOffset),
                         "个人记忆": si.isPrivate,
                         "私聊": m.sessionInfo.isPrivate,
                         "展示号码": showNumber,

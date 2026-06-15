@@ -103,7 +103,7 @@ export function registerBan() {
 
         const s = `被禁言成员数量: ${groupShutList.length}\n` +
             groupShutList.slice(0, 50)
-                .map((item: any, index: number) => `${index + 1}. ${item.nick}(${item.uin}) ${item.cardName && item.cardName !== item.nick ? `群名片: ${item.cardName}` : ''} 禁言结束时间: ${fmtDate(item.shutUpTime)}`)
+                .map((item: any, index: number) => `${index + 1}. ${item.nick}(${item.uin}) ${item.cardName && item.cardName !== item.nick ? `群名片: ${item.cardName}` : ''} 禁言结束时间: ${fmtDate(item.shutUpTime, ConfigManager.message.utcOffset)}`)
                 .join('\n');
 
         return { content: s, images: [] };

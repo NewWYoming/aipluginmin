@@ -1,3 +1,4 @@
+import { ConfigManager } from "../config/configManager";
 import { TimerManager } from "../timer";
 import { fmtDate } from "../utils/utils_string";
 import { Tool } from "./tool";
@@ -17,7 +18,7 @@ export function registerTime() {
         }
     });
     toolGet.solve = async (_, __, ___, ____) => {
-        return { content: fmtDate(Math.floor(Date.now() / 1000)), images: [] };
+        return { content: fmtDate(Math.floor(Date.now() / 1000), ConfigManager.message.utcOffset), images: [] };
     }
 
     const toolSet = new Tool({
@@ -148,13 +149,13 @@ export function registerTime() {
         const s = timers.map((t, i) => {
             switch (t.type as 'target' | 'interval') {
                 case 'target': {
-                    return `${i + 1}. 定时器设定时间：${fmtDate(t.set)}
+                    return `${i + 1}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
-目标时间：${fmtDate(t.target)}
+目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}
 内容：${t.content}`;
                 }
                 case 'interval': {
-                    return `${i + 1}. 定时器设定时间：${fmtDate(t.set)}
+                    return `${i + 1}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 间隔时间：${t.interval}秒
 剩余触发次数：${t.count === -1 ? '无限' : t.count - 1}
