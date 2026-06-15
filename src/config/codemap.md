@@ -2,11 +2,11 @@
 
 ## 1. Responsibility
 
-Configuration registration and management for the `aiplugin4` SeaDice plugin. This module:
+Configuration registration and management for the `aiplugin4` SealDice plugin. This module:
 
-- **Registers** all user-facing configuration keys with the SeaDice host via `seal.ext.register*Config()` (string, int, bool, float, option, template).
+- **Registers** all user-facing configuration keys with the SealDice host via `seal.ext.register*Config()` (string, int, bool, float, option, template).
 - **Reads** runtime configuration values on demand (with a short-lived cache).
-- **Transforms** raw SeaDice config values into typed, usable runtime objects: `RegExp`, `HandlebarsTemplateDelegate`, path maps, and structured request-body objects.
+- **Transforms** raw SealDice config values into typed, usable runtime objects: `RegExp`, `HandlebarsTemplateDelegate`, path maps, and structured request-body objects.
 - **Exposes** all configuration as static getters on `ConfigManager`, consumed by every other module (`src/AI/`, `src/cmd/`, `src/tool/`, `src/utils/`).
 
 ---
@@ -31,8 +31,8 @@ Each feature area has a dedicated file with a class that follows a uniform inter
 | `sample.ts` | `SampleConfig` | `aiplugin4_0:示例` | Reference example (disabled in production) |
 
 Each class has:
-- `static ext: seal.ExtInfo` — reference to the SeaDice extension for this config group.
-- `static register()` — registers all config keys with SeaDice.
+- `static ext: seal.ExtInfo` — reference to the SealDice extension for this config group.
+- `static register()` — registers all config keys with SealDice.
 - `static get()` — reads and returns a typed config object.
 
 ### Orchestrator (`ConfigManager`)
@@ -50,7 +50,7 @@ Each class has:
 
 ### Extension Namespacing per Domain
 
-Each config group registers under a different SeaDice extension name (e.g. `aiplugin4_1:对话`, `aiplugin4_2:函数调用`), isolating config keys between domains in the SeaDice host.
+Each config group registers under a different SealDice extension name (e.g. `aiplugin4_1:对话`, `aiplugin4_2:函数调用`), isolating config keys between domains in the SealDice host.
 
 ### Cache Layer
 
@@ -105,7 +105,7 @@ This file is not a config class. It exports plain constants used throughout the 
 
 | Integration | Details |
 |---|---|
-| **SeaDice Extension API** | `seal.ext.register*Config()`, `seal.ext.get*Config()`, `seal.ext.find()`, `seal.ext.new()` — the sole mechanism for persisting user settings in the SeaDice host. |
+| **SealDice Extension API** | `seal.ext.register*Config()`, `seal.ext.get*Config()`, `seal.ext.find()`, `seal.ext.new()` — the sole mechanism for persisting user settings in the SealDice host. |
 | **Handlebars** | Imported in `configManager.ts`. Used to compile user-customizable templates for system prompts, memory display, tool prompts, etc. into `HandlebarsTemplateDelegate`. |
 | **Plugin modules** | `src/AI/`, `src/cmd/`, `src/tool/` import `ConfigManager` and access config via static getters (e.g. `ConfigManager.request.url`, `ConfigManager.memory.isMemory`). |
 | **`config.ts` constants** | Imported directly by modules that need `VERSION`, `aliasMap`, `faceMap`, `PRIVILEGELEVELMAP`, `HELPMAP`. |

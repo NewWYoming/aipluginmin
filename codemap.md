@@ -1,12 +1,12 @@
 # Repository Atlas: aiplugin4
 
-> A SeaDice JS plugin that makes the dice bot converse like a human. Single bundled JS output loaded by SeaDice.
+> A SealDice JS plugin that makes the dice bot converse like a human. Single bundled JS output loaded by SealDice.
 
 ## System Entry Points
 
 | Entry | Role |
 |-------|------|
-| `src/index.ts` | Plugin main — registers SeaDice hooks, routes incoming messages to AI |
+| `src/index.ts` | Plugin main — registers SealDice hooks, routes incoming messages to AI |
 | `header.txt` | UserScript metadata prepended to bundled output |
 | `tools/build.js` | esbuild build script — bundles, prepends header, auto-backs up old dist |
 | `src/config/config.ts` | Global constants: VERSION, AUTHOR, NAME, CQ type allowlist, privilege levels |
@@ -17,7 +17,7 @@
 |-----------|---------------|---------|
 | `src/` | Plugin entry (hooks wiring), logger, timer system, version update | [📄](src/codemap.md) |
 | `src/AI/` | Core AI: chat orchestration, context/memory management, image pool, session management | [📄](src/AI/codemap.md) |
-| `src/config/` | SeaDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
+| `src/config/` | SealDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
 | `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
 | `src/service/providers/` | Provider pattern for LLM backends: DeepSeek V4 (thinking mode), OpenAI-compatible generic | [📄](src/service/providers/codemap.md) |
 | `src/tool/` | AI function-calling tools: ~42 tools across COC/TRPG, memory, alias, image, messaging, utility domains | [📄](src/tool/codemap.md) |
@@ -36,7 +36,7 @@ onNotCommandReceived → index.ts routes → AI.chat()
   → context.addMessage() persists to messages array, collects user observations (Tier 1)
 
 Config system:
-  ConfigManager (singleton) → domain config classes → SeaDice ext.register*Config() → typed get() with 3s TTL cache
+  ConfigManager (singleton) → domain config classes → SealDice ext.register*Config() → typed get() with 3s TTL cache
 
 Session model:
   AIManager.getAI(sid) → per-session AI instance (private=uid, group=gid)

@@ -4,13 +4,13 @@
 
 The command layer of the AI骰娘4 plugin. It registers and handles all `.ai` prefixed chat commands (e.g., `.ai on`, `.ai status`, `.ai img`, `.ai memo`). This is the primary user-facing interface — every interaction a user has with the AI (beyond raw passive chat) goes through this module.
 
-The single registered SeaDice command is `.ai`. All sub-commands are dispatched internally via the `SubCmd` registry.
+The single registered SealDice command is `.ai`. All sub-commands are dispatched internally via the `SubCmd` registry.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `root.ts` | Defines `SubCmd` base class + `SubCmdContext` interface; registers the `.ai` SeaDice command; orchestrates sub-command discovery and dispatch |
+| `root.ts` | Defines `SubCmd` base class + `SubCmdContext` interface; registers the `.ai` SealDice command; orchestrates sub-command discovery and dispatch |
 | `privilege.ts` | Declares `CmdPrivInfo` tree structure; implements `PrivilegeManager` for cascading session/user permission checks |
 | `sub_cmd/on.ts` | `.ai on [--c=10] [--t=60] [--p=10] [--a=09:00-18:00-5]` — Activate AI with counter/timer/probability/active-time triggers |
 | `sub_cmd/off.ts` | `.ai off [--c] [--t] [--p] [--a]` — Deactivate AI or disable individual trigger modes |
@@ -49,7 +49,7 @@ Sub-commands with further nesting (tool, memory, token, image, privilege, ignore
 ### 4. Cascading Privilege System (`privilege.ts`)
 Permissions form a tree (`CmdPrivInfo` with optional nested `args`). `PrivilegeManager.checkPriv()` walks the command chain:
 1. Checks **session privilege** (0/1) against the AI's setting
-2. Checks **user privilege** (user/master/inviter) against SeaDice's `ctx.privilegeLevel`
+2. Checks **user privilege** (user/master/inviter) against SealDice's `ctx.privilegeLevel`
 3. Falls through to a force-trigger level if session-level check fails
 4. Wildcard `*` entries allow catch-all permission rules
 
@@ -65,7 +65,7 @@ All sub-command handlers receive a standardised `SubCmdContext` object with pars
 | `ConfigManager.ext.cmdMap` | `.ai` command registered at startup via `ConfigManager.ext.cmdMap['AI']` and `cmdMap['ai']` |
 | `AIManager.getAI(sid)` | Every command retrieves the AI instance for the current session (user/group) |
 | `AIManager.saveAI(sid)` | Stateful commands persist AI settings, memory, tool status, ignore list |
-| `PrivilegeManager` | Permission checks against `defaultCmdPriv` (loaded from SeaDice storage) |
+| `PrivilegeManager` | Permission checks against `defaultCmdPriv` (loaded from SealDice storage) |
 | `TimerManager` | `.ai on --active`, `.ai standby`, `.ai off`, `.ai timer` — manages per-session timers |
 | `ToolManager` | `.ai tool on/off/call/help` — accesses registered tool functions |
 | `ImageManager` / `ImagePool` | `.ai image` — manages stolen and local image pools |
@@ -78,7 +78,7 @@ All sub-command handlers receive a standardised `SubCmdContext` object with pars
 ```
 User: .ai on --c=10
   ↓
-SeaDice: cmd.solve(ctx, msg, cmdArgs)
+SealDice: cmd.solve(ctx, msg, cmdArgs)
   ↓
 root.ts: parse args → extract sid, page, validate
   ↓
@@ -88,7 +88,7 @@ root.ts: SubCmd.map['on'].solve(scc)
   ↓
 sub_cmd/on.ts: parse kwargs, set ai.setting.{counter,timer,prob,activeTimeInfo}
   ↓
-AIManager.saveAI(sid) → persist to SeaDice storage
+AIManager.saveAI(sid) → persist to SealDice storage
   ↓
 seal.replyToSender() → respond to chat
 ```
