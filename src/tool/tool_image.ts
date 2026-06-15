@@ -139,7 +139,7 @@ export function registerImage() {
                 properties: {
                     keyword: {
                         type: 'string',
-                        description: '可选，按关键词过滤描述。建议先不传 keyword 查看全部图片，再挑一张发送'
+                        description: '可选，按关键词过滤描述。建议先按照当前想表达的情感传关键词'
                     }
                 },
                 required: []
