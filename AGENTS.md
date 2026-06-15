@@ -2,7 +2,7 @@
 
 ## What this is
 
-A SealDice JS plugin (AI骰娘4) that makes the dice bot converse like a human. Runs inside the SeaDice host runtime. Single bundled JS output loaded by SeaDice.
+A SealDice JS plugin (AI骰娘4) that makes the dice bot converse like a human. Runs inside the SealDice host runtime. Single bundled JS output loaded by SealDice.
 
 ## Build
 
@@ -13,7 +13,7 @@ npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
 
 - Bundler: **esbuild** (not tsc). `tsconfig.json` is only for eslint type-checking + esbuild config reference.
 - esbuild prepends `header.txt` (UserScript metadata) to the output.
-- Build marks `csharp` and `puerts` as external — these exist in the SeaDice host runtime.
+- Build marks `csharp` and `puerts` as external — these exist in the SealDice host runtime.
 
 ### Before every build
 
@@ -55,20 +55,11 @@ For debugging, investigation, and non-trivial fixes, the preferred pattern is:
 
 Example of this flow in practice: vector dead code cleanup → Jina EOF debugging → timezone fix. Each followed: research (subagent) → write plan → oracle review → implement (fixer) → commit + codemap update.
 
-## SeaDice API
+## SealDice API
 
-- **`types/seal.d.ts`** declares the SeaDice runtime types (provided globally, no import needed). The file is **incomplete**.
-- If you need an API not covered here, check the SeaDice source: `https://github.com/sealdice/sealdice-core`
+- **`types/seal.d.ts`** declares the SealDice runtime types (provided globally, no import needed). The file is **incomplete**.
+- If you need an API not covered here, check the SealDice source: `https://github.com/sealdice/sealdice-core`
 - Key patterns: plugin registers via `seal.ext.new()`, configs via `seal.ext.registerStringConfig()` etc., hooks via `ext.onNotCommandReceived` / `ext.onCommandReceived` / `ext.onMessageSend`.
-
-### Runtime quirks (goja)
-
-The plugin runs inside **goja** (Go-language JS runtime), not Node.js. Known limitations:
-
-- **`Response.clone()` does not exist.** Retry logic must consume body (`resp.text()`) directly, not clone-first.
-- **`fetch()` goes through `goproxy` HTTP/2 transport,** which has known issues with Cloudflare-fronted endpoints (EOF on connection reuse). Use retry loops that include body consumption.
-- **`new Date(timestamp * 1000)` returns UTC-anchored time.** `getHours()`/`getFullYear()` etc. return UTC values, not local. Workaround: `fmtDate()` uses `getUTC*()` + `utcOffset` compensation. Set `时区偏移/小时` config to 8 for China.
-- **No `toLocaleString()` timezone support.** Use `fmtDate()` instead.
 
 ## Architecture
 
