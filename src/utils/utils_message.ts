@@ -215,7 +215,7 @@ export function buildContent(message: Message): string {
     ) : '';
     const content = message.msgArray.map(m =>
         ((showMsgId && m.msgId) ? `<|msg_id:${m.msgId}|>` : '') +
-        (showTime ? `<|time:${fmtDate(m.time)}|>` : '') +
+        (showTime ? `<|time:${fmtDate(m.time, ConfigManager.message.utcOffset)}|>` : '') +
         m.content
     ).join('\f');
     return prefix + content;

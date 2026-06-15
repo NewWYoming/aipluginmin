@@ -572,14 +572,22 @@ function advancedSplit(s: string, r: RegExp) {
     return parts;
 }
 
-export function fmtDate(timestamp: number) {
-    const date = new Date(timestamp * 1000);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hour = String(date.getHours()).padStart(2, '0');
-    const minute = String(date.getMinutes()).padStart(2, '0');
-    const second = String(date.getSeconds()).padStart(2, '0');
+/**
+ * 格式化 Unix 时间戳为 YYYY-MM-DD HH:mm:ss
+ * @param timestamp Unix 时间戳（秒），不是毫秒
+ * @param utcOffset UTC 时区偏移（小时），如东八区传 8
+ */
+export function fmtDate(timestamp: number, utcOffset = 0) {
+    // goja bug: new Date(timestamp * 1000) 返回 UTC 锚定的 time.Time
+    // 通过叠加偏移毫秒 + 使用 getUTC*() 方法绕过
+    const offsetMs = utcOffset * 3600 * 1000;
+    const date = new Date(timestamp * 1000 + offsetMs);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hour = String(date.getUTCHours()).padStart(2, '0');
+    const minute = String(date.getUTCMinutes()).padStart(2, '0');
+    const second = String(date.getUTCSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 

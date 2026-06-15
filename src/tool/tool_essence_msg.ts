@@ -1,7 +1,8 @@
 import { transformMsgIdBack, transformMsgId } from "../utils/utils";
 import { Tool } from "./tool";
 import { Image } from "../AI/image";
-import { transformArrayToContent } from "../utils/utils_string";
+import { fmtDate, transformArrayToContent } from "../utils/utils_string";
+import { ConfigManager } from "../config/configManager";
 import { deleteEssenceMsg, getEssenceMsgList, getGroupMemberInfo, netExists, setEssenceMsg } from "../utils/utils_ob11";
 
 export function registerEssenceMsg() {
@@ -71,7 +72,7 @@ export function registerEssenceMsg() {
 
         for (let i = 0; i < essenceMsgList.length; i++) {
             const essence = essenceMsgList[i];
-            const addTime = new Date(essence.operator_time * 1000).toLocaleString();
+            const addTime = fmtDate(essence.operator_time, ConfigManager.message.utcOffset);
             const operatorName = essence.operator_nick || `用户${essence.operator_id}`;
             const senderName = essence.sender_nick || `用户${essence.sender_id}`;
             const msgId = transformMsgId(essence.message_id);

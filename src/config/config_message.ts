@@ -91,6 +91,7 @@ export class MessageConfig {
         seal.ext.registerBoolConfig(MessageConfig.ext, "是否合并user content", false, "在不支持连续多个role为user的情况下开启，可用于适配deepseek-reasoner");
         seal.ext.registerIntConfig(MessageConfig.ext, "存储上下文对话限制轮数", 15, "出现一次user视作一轮");
         seal.ext.registerIntConfig(MessageConfig.ext, "上下文插入system message间隔轮数", 0, "需要小于限制轮数的二分之一才能生效，为0时不生效，示例对话不计入轮数");
+        seal.ext.registerIntConfig(MessageConfig.ext, '时区偏移/小时', 0, { min: -12, max: 14 });
     }
 
     static get() {
@@ -105,7 +106,8 @@ export class MessageConfig {
             showTime: seal.ext.getBoolConfig(MessageConfig.ext, "是否在消息内添加发送时间"),
             isMerge: seal.ext.getBoolConfig(MessageConfig.ext, "是否合并user content"),
             maxRounds: seal.ext.getIntConfig(MessageConfig.ext, "存储上下文对话限制轮数"),
-            insertCount: seal.ext.getIntConfig(MessageConfig.ext, "上下文插入system message间隔轮数")
+            insertCount: seal.ext.getIntConfig(MessageConfig.ext, "上下文插入system message间隔轮数"),
+            utcOffset: seal.ext.getIntConfig(MessageConfig.ext, '时区偏移/小时'),
         }
     }
 }

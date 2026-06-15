@@ -74,7 +74,7 @@ export class TimerManager {
         }
 
         logger.info(`添加${timer.type}定时器${ai.id}:
-触发时间:${fmtDate(target)}
+触发时间:${fmtDate(target, ConfigManager.message.utcOffset)}
 内容:${content}`);
     }
 
@@ -127,7 +127,7 @@ export class TimerManager {
         }
 
         logger.info(`添加${timer.type}定时器${ai.id}:
-触发时间:${fmtDate(target)}`);
+触发时间:${fmtDate(target, ConfigManager.message.utcOffset)}`);
     }
 
     static removeTimers(sid: string = '', content: string = '', types: ('target' | 'interval' | 'activeTime')[] = [], index_list: number[] = []) {
@@ -175,18 +175,18 @@ export class TimerManager {
         if (p > Math.ceil(timers.length / 10)) p = Math.ceil(timers.length / 10);
         return timers.slice((p - 1) * 10, p * 10).map((t, i) => {
             switch (t.type) {
-                case 'target': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set)}
+                case 'target': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
-目标时间：${fmtDate(t.target)}
+目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}
 内容：${t.content}`;
-                case 'interval': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set)}
+                case 'interval': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 间隔时间：${t.interval}秒
 剩余触发次数：${t.count === -1 ? '无限' : t.count - 1}
 内容：${t.content}`;
-                case 'activeTime': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set)}
+                case 'activeTime': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
-目标时间：${fmtDate(t.target)}`;
+目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}`;
             }
         }).join('\n') + `\n当前页码:${p}/${Math.ceil(timers.length / 10)}`;
     }
@@ -221,9 +221,9 @@ export class TimerManager {
                             const ai = AIManager.getAI(sid);
 
                             const s = `你设置的定时器触发了，请按照以下内容发送回复：
-定时器设定时间：${fmtDate(set)}
-目标时间：${fmtDate(target)}
-当前触发时间：${fmtDate(Math.floor(Date.now() / 1000))}
+定时器设定时间：${fmtDate(set, ConfigManager.message.utcOffset)}
+目标时间：${fmtDate(target, ConfigManager.message.utcOffset)}
+当前触发时间：${fmtDate(Math.floor(Date.now() / 1000), ConfigManager.message.utcOffset)}
 提示内容：${content}`;
 
                             await ai.context.addSystemUserMessage("定时器触发提示", s, []);
@@ -255,10 +255,10 @@ export class TimerManager {
                             }
 
                             const s = `你设置的定时器触发了，请按照以下内容发送回复：
-定时器设定时间：${fmtDate(set)}
-间隔时间：${fmtDate(interval)}
+定时器设定时间：${fmtDate(set, ConfigManager.message.utcOffset)}
+间隔时间：${interval}秒
 剩余触发次数：${count === -1 ? '无限' : count - 1}
-当前触发时间：${fmtDate(Math.floor(Date.now() / 1000))}
+当前触发时间：${fmtDate(Math.floor(Date.now() / 1000), ConfigManager.message.utcOffset)}
 提示内容：${content}`;
 
                             await ai.context.addSystemUserMessage("定时器触发提示", s, []);
@@ -284,7 +284,7 @@ export class TimerManager {
                             const curSegIndex = ai.curActiveTimeSegIndex;
                             const nextTimePoint = ai.getNextTimePoint(curSegIndex);
                             if (curSegIndex === -1) {
-                                logger.error(`${sid} 不在活跃时间内，触发了 activeTime 定时器，真奇怪\ncurSegIndex:${curSegIndex},setTime:${set},nextTimePoint:${fmtDate(nextTimePoint)}`);
+                                logger.error(`${sid} 不在活跃时间内，触发了 activeTime 定时器，真奇怪\ncurSegIndex:${curSegIndex},setTime:${set},nextTimePoint:${fmtDate(nextTimePoint, ConfigManager.message.utcOffset)}`);
                                 continue;
                             }
                             if (nextTimePoint !== -1) {
@@ -294,8 +294,8 @@ export class TimerManager {
                             const messages = ai.context.messages;
                             const lastMsgArray = messages[messages.length - 1].msgArray;
                             const lastTime = lastMsgArray[lastMsgArray.length - 1].time;
-                            const lastTimePrompt = `最后一条消息时间：${fmtDate(lastTime)}`;
-                            const s = `现在是你的活跃时间：${fmtDate(Math.floor(Date.now() / 1000))}
+                            const lastTimePrompt = `最后一条消息时间：${fmtDate(lastTime, ConfigManager.message.utcOffset)}`;
+                            const s = `现在是你的活跃时间：${fmtDate(Math.floor(Date.now() / 1000), ConfigManager.message.utcOffset)}
 ${lastTimePrompt}
 请说点什么`;
 
