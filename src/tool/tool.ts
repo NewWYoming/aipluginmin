@@ -215,7 +215,7 @@ export class ToolManager {
      * @param args
      */
     static async extensionSolve(ctx: seal.MsgContext, msg: seal.Message, ai: AI, cmdInfo: CmdInfo, args: string[], kwargs: seal.Kwarg[], at: seal.AtInfo[]): Promise<[string, boolean]> {
-        const cmdArgs = this.cmdArgs;
+        const cmdArgs = (this.cmdArgs = this.cmdArgs || {} as seal.CmdArgs);
         cmdArgs.command = cmdInfo.name;
         cmdArgs.args = cmdInfo.fixedArgs.concat(args);
         cmdArgs.kwargs = kwargs;
@@ -342,9 +342,7 @@ export class ToolManager {
 
         const tool = this.toolMap[name];
         if (tool.cmdInfo.ext !== '' && this.cmdArgs == null) {
-            logger.warning(`暂时无法调用函数，请先使用 .r 指令`);
-            await ai.context.addToolMessage(tool_call.id, `暂时无法调用函数，请先提示用户使用 .r 指令`, []);
-            return "none";
+            this.cmdArgs = {} as seal.CmdArgs;
         }
         if (tool.type !== "all" && tool.type !== msg.messageType) {
             logger.warning(`调用函数失败:函数${name}可使用的场景类型为${tool.type}，当前场景类型为${msg.messageType}`);
