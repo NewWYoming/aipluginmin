@@ -90,7 +90,7 @@ All follow the same pattern: `getNet()` → `net.callApi(epId, action, params)` 
 | Function | Purpose |
 |----------|---------|
 | `compareVersions` | `1` / `-1` / `0` for semver `x.y.z` strings. |
-| `checkUpdate` | Reads stored version from SeaDice persistent storage; if current `VERSION` is newer, writes it and logs the changelog from `updateInfo`. Called once at plugin load. |
+| `checkUpdate` | Reads stored version from SealDice persistent storage; if current `VERSION` is newer, writes it and logs the changelog from `updateInfo`. Called once at plugin load. |
 
 ## Integration Points
 
