@@ -17,7 +17,6 @@ export class ToolConfig {
             'rename',
             'record',
             'text_to_image',
-            'san_check',
             'set_trigger_condition',
             'music_play'
         ], "");

@@ -31,9 +31,13 @@ export function registerMessage() {
                         type: 'string',
                         description: '消息内容'
                     },
-                    function: {
-                        type: "string",
-                        description: '函数调用，纯JSON字符串，格式为：{"name": "函数名称", "arguments": {"参数1": "值1", "参数2": "值2"}}'
+                    tool_call: {
+                        type: "object",
+                        description: '在目标聊天中调用的函数。不传则只发消息不调用函数',
+                        properties: {
+                            name: { type: "string", description: "函数名称" },
+                            arguments: { type: "object", description: "函数参数，键值对" }
+                        }
                     },
                     reason: {
                         type: 'string',
@@ -45,7 +49,7 @@ export function registerMessage() {
         }
     });
     toolSend.solve = async (ctx, msg, ai, args) => {
-        const { msg_type, name, content, function: tool_call, reason = '' } = args;
+        const { msg_type, name, content, tool_call, reason = '' } = args;
 
         const { showNumber } = ConfigManager.message;
         const source = ctx.isPrivate ?
@@ -100,7 +104,7 @@ export function registerMessage() {
 
         if (tool_call) {
           try {
-            const tc = typeof tool_call === 'string' ? JSON.parse(tool_call) : tool_call;
+            const tc = tool_call;
             const fakeToolCall: ToolCall = {
               index: 0,
               id: 'send_msg_' + Date.now(),
