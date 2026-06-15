@@ -33,15 +33,15 @@ export function registerContext() {
         if (ctx_type === "private") {
             const ui = await ai.context.findUserInfo(ctx, name, true);
             if (ui === null) return { content: `未找到<${name}>`, images: [] };
-            if (ui.id === ctx.player.userId && ctx.isPrivate) return { content: `向当前私聊发送消息无需调用函数`, images: [] };
-            if (ui.id === ctx.endPoint.userId) return { content: `禁止向自己发送消息`, images: [] };
+            if (ui.id === ctx.player.userId && ctx.isPrivate) return { content: `查看当前对话上下文无需调用函数`, images: [] };
+            if (ui.id === ctx.endPoint.userId) return { content: `禁止查看自己的上下文`, images: [] };
 
             ({ ctx } = getCtxAndMsg(ctx.endPoint.userId, ui.id, ''));
             ai = AIManager.getAI(ui.id);
         } else if (ctx_type === "group") {
             const gi = await ai.context.findGroupInfo(ctx, name);
             if (gi === null) return { content: `未找到<${name}>`, images: [] };
-            if (gi.id === ctx.group.groupId) return { content: `向当前群聊发送消息无需调用函数`, images: [] };
+            if (gi.id === ctx.group.groupId) return { content: `查看当前群聊上下文无需调用函数`, images: [] };
 
             ({ ctx } = getCtxAndMsg(ctx.endPoint.userId, '', gi.id));
             ai = AIManager.getAI(gi.id);

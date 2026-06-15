@@ -16,7 +16,10 @@ export class ToolConfig {
         seal.ext.registerTemplateConfig(ToolConfig.ext, "默认关闭的函数", [
             'rename',
             'record',
-            'text_to_image'
+            'text_to_image',
+            'san_check',
+            'set_trigger_condition',
+            'music_play'
         ], "");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "提供给AI的牌堆名称", ["克苏鲁神话"], "没有的话建议把draw_deck这个函数加入不允许调用");
         seal.ext.registerOptionConfig(ToolConfig.ext, "ai语音使用的音色", '傲娇少女', [
