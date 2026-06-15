@@ -74,10 +74,6 @@ export function registerRollCheck() {
         return { content: s, images: [] };
     }
 
-    // 该函数疑似无法正常工作。无法找到原因。
-    // 表现：使用该函数时，san值会被异常清0
-    // 调试发现正常指令的cmdArgs与该函数构建的完全一致的情况下也能触发bug
-    // 推测：构建的临时ctx导致bug，详细原因不明，期待后续修复
     const tool = new Tool({
         type: "function",
         function: {
@@ -114,16 +110,12 @@ export function registerRollCheck() {
         const ui = await ai.context.findUserInfo(ctx, name);
         if (ui === null) return { content: `未找到<${name}>`, images: [] };
 
-        ({ ctx, msg } = getCtxAndMsg(ctx.endPoint.userId, ui.id, ctx.group.groupId));
-
-        const value = seal.vars.intGet(ctx, 'san')[0];
-        if (value === 0) seal.vars.intSet(ctx, 'san', 60);
-
         const args2 = [];
         if (additional_dice) args2.push(additional_dice);
         args2.push(expression);
 
-        const [s, success] = await ToolManager.extensionSolve(ctx, msg, ai, tool.cmdInfo, args2, [], []);
+        // 通过 at 参数指定目标玩家，COC7 扩展内部 GetCtxProxyFirst 自动切换 ctx
+        const [s, success] = await ToolManager.extensionSolve(ctx, msg, ai, tool.cmdInfo, args2, [], [{ userId: ui.id }]);
         if (!success) return { content: 'san check执行失败', images: [] };
         return { content: s, images: [] };
     }
