@@ -42,11 +42,33 @@ Bump both before committing. Do not bump for docs-only or AGENTS.md-only changes
 
 Exceptions: trivial bugfixes (<10 lines, single file), config default changes, log line additions, version bumps themselves.
 
+### Preferred troubleshooting / implementation workflow
+
+For debugging, investigation, and non-trivial fixes, the preferred pattern is:
+
+1. **Research** — dispatch `@explorer` for codebase search, `@librarian` for external/library docs. Run in parallel when independent.
+2. **Analyze & Plan** — present findings; write implementation plan with exact file paths, code changes, and impact analysis.
+3. **Independent review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. Update plan based on findings.
+4. **Implement** — dispatch `@fixer` with the full plan and precise instructions. Single responsible fixer per plan.
+5. **Verify & Commit** — run `npm run build`, commit with descriptive message, update codemap files.
+6. **Reconcile** — check all background tasks completed; reconcile any file conflicts from parallel agents.
+
+Example of this flow in practice: vector dead code cleanup → Jina EOF debugging → timezone fix. Each followed: research (subagent) → write plan → oracle review → implement (fixer) → commit + codemap update.
+
 ## SeaDice API
 
 - **`types/seal.d.ts`** declares the SeaDice runtime types (provided globally, no import needed). The file is **incomplete**.
 - If you need an API not covered here, check the SeaDice source: `https://github.com/sealdice/sealdice-core`
 - Key patterns: plugin registers via `seal.ext.new()`, configs via `seal.ext.registerStringConfig()` etc., hooks via `ext.onNotCommandReceived` / `ext.onCommandReceived` / `ext.onMessageSend`.
+
+### Runtime quirks (goja)
+
+The plugin runs inside **goja** (Go-language JS runtime), not Node.js. Known limitations:
+
+- **`Response.clone()` does not exist.** Retry logic must consume body (`resp.text()`) directly, not clone-first.
+- **`fetch()` goes through `goproxy` HTTP/2 transport,** which has known issues with Cloudflare-fronted endpoints (EOF on connection reuse). Use retry loops that include body consumption.
+- **`new Date(timestamp * 1000)` returns UTC-anchored time.** `getHours()`/`getFullYear()` etc. return UTC values, not local. Workaround: `fmtDate()` uses `getUTC*()` + `utcOffset` compensation. Set `时区偏移/小时` config to 8 for China.
+- **No `toLocaleString()` timezone support.** Use `fmtDate()` instead.
 
 ## Architecture
 
