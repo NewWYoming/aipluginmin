@@ -274,6 +274,23 @@ export class AIManager {
         this.cache = {};
     }
 
+    /** 从缓存中驱逐 AI 实例（先持久化） */
+    static evictAI(id: string): void {
+        if (!this.cache[id]) return;
+        this.saveAI(id);
+        delete this.cache[id];
+        logger.info(`AI 实例已释放: ${id}`);
+    }
+
+    /** 驱逐所有私聊 AI 实例（群聊实例保留） */
+    static evictPrivateInstances(): void {
+        const privateIds = Object.keys(this.cache).filter(id => !id.includes(':Group:'));
+        for (const id of privateIds) {
+            this.evictAI(id);
+        }
+        logger.info(`私聊AI实例已清理: ${privateIds.length} 个`);
+    }
+
     static getAI(id: string) {
         if (!this.cache.hasOwnProperty(id)) {
             let ai = new AI();

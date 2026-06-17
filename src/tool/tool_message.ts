@@ -71,6 +71,9 @@ export function registerMessage() {
         }
 
         if (msg_type === "private") {
+            if (ConfigManager.received.disabledInPrivate) {
+                return { content: '私聊AI功能已禁用', images: [] };
+            }
             const ui = await ai.context.findUserInfo(ctx, name, true);
             if (ui === null) return { content: `未找到<${name}>`, images: [] };
             if (ui.id === ctx.player.userId && ctx.isPrivate) return { content: `向当前私聊发送消息无需调用函数`, images: [] };

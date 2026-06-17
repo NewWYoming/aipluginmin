@@ -12,6 +12,8 @@ import { knowledgeMM } from "./AI/memory";
 import { CQTYPESALLOW } from "./config/config";
 import { registerCmd } from "./cmd/root";
 
+let _disabledInPrivateCleaned = false;
+
 function main() {
   ConfigManager.registerConfig();
   checkUpdate();
@@ -39,10 +41,21 @@ function main() {
         return;
       }
 
+      if (!_disabledInPrivateCleaned && disabledInPrivate) {
+        _disabledInPrivateCleaned = true;
+        AIManager.evictPrivateInstances();
+      }
+
       const uid = ctx.player.userId;
       const gid = ctx.group.groupId;
       const sid = ctx.isPrivate ? uid : gid;
-      const ai = AIManager.getAI(sid);
+      let ai = AIManager.cache[sid];
+      if (!ai) {
+        if (!ctx.isPrivate && !globalStandby && !triggerConditionMap[sid]?.length) {
+          return;
+        }
+        ai = AIManager.getAI(sid);
+      }
 
       // 检查活跃时间定时器
       await ai.checkActiveTimer(ctx);
@@ -126,6 +139,7 @@ function main() {
   //接受的指令
   ext.onCommandReceived = async (ctx, msg, cmdArgs) => {
     try {
+      if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) return;
       if (ToolManager.cmdArgs === null) {
         ToolManager.cmdArgs = cmdArgs;
       }
@@ -159,6 +173,7 @@ function main() {
   //骰子发送的消息
   ext.onMessageSend = async (ctx, msg) => {
     try {
+      if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) return;
       const uid = ctx.player.userId;
       const gid = ctx.group.groupId;
       const sid = ctx.isPrivate ? uid : gid;

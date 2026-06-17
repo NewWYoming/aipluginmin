@@ -85,6 +85,10 @@ export function registerCmd() {
     cmd.allowDelegate = true;
     cmd.solve = (ctx, msg, cmdArgs) => {
         try {
+            if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) {
+                seal.replyToSender(ctx, msg, '私聊AI功能已禁用');
+                return seal.ext.newCmdExecuteResult(true);
+            }
             const ret = seal.ext.newCmdExecuteResult(true);
 
             const subCmd = aliasToCmd(cmdArgs.getArgN(1));
