@@ -11,7 +11,7 @@ import { registerAlias } from "./tool_alias"
 import { registerRename } from "./tool_rename"
 import { registerRollCheck } from "./tool_roll_check"
 import { registerTime } from "./tool_time"
-import { registerRecord } from "./tool_voice"
+import { registerTTS } from "./tool_voice"
 import { registerWeb } from "./tool_web"
 import { registerGroupSign } from "./tool_group_sign"
 import { registerGetPersonInfo } from "./tool_person_info"
@@ -194,7 +194,7 @@ export class ToolManager {
         registerRename();
         registerAttr();
         registerBan();
-        // registerRecord();
+        registerTTS();
         registerTime();
         registerWeb();
         // registerImage();
