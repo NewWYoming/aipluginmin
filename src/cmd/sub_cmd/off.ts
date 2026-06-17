@@ -30,6 +30,7 @@ export function registerCmdOff() {
 
             seal.replyToSender(ctx, msg, 'AI已关闭');
             AIManager.saveAI(sid);
+            AIManager.evictAI(sid);
             return ret;
         }
 
@@ -75,6 +76,7 @@ export function registerCmdOff() {
 
         seal.replyToSender(ctx, msg, text);
         AIManager.saveAI(sid);
+        AIManager.evictAI(sid);
         return ret;
     }
 }

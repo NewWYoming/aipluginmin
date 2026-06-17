@@ -227,6 +227,7 @@ export class TimerManager {
 提示内容：${content}`;
 
                             await ai.context.addSystemUserMessage("定时器触发提示", s, []);
+                            if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) continue;
                             await ai.chat(ctx, msg, '定时任务');
 
                             changed = true;
@@ -262,6 +263,7 @@ export class TimerManager {
 提示内容：${content}`;
 
                             await ai.context.addSystemUserMessage("定时器触发提示", s, []);
+                            if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) continue;
                             await ai.chat(ctx, msg, '定时任务');
 
                             changed = true;
@@ -300,6 +302,7 @@ ${lastTimePrompt}
 请说点什么`;
 
                             await ai.context.addSystemUserMessage("活跃时间触发提示", s, []);
+                            if (ctx.isPrivate && ConfigManager.received.disabledInPrivate) continue;
                             await ai.chat(ctx, msg, '活跃时间');
 
                             changed = true;
