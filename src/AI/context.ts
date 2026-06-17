@@ -129,6 +129,17 @@ export class Context {
                 names.push(name);
             }
             this.aliases[uid].lastUsed[name] = now;
+            // 上限 10 条，超出删最旧
+            while (names.length > 10) {
+                let oldest = names[0];
+                let oldestTime = this.aliases[uid].lastUsed[oldest] || 0;
+                for (const n of names) {
+                    const t = this.aliases[uid].lastUsed[n] || 0;
+                    if (t < oldestTime) { oldest = n; oldestTime = t; }
+                }
+                names.splice(names.indexOf(oldest), 1);
+                delete this.aliases[uid].lastUsed[oldest];
+            }
         }
 
         if (length !== 0 && messages[length - 1].uid === uid && !/<[\|│｜]?function(?:_call)?>/.test(content)) {
@@ -164,6 +175,11 @@ export class Context {
             }
             const obs = ai.memory.observations[uid];
             obs.rawMessages.push(content);
+            // 硬上限 = maxObservedMessages * 3，超出丢弃最旧
+            const cap = (ConfigManager.memory.maxObservedMessages || 10) * 3;
+            while (obs.rawMessages.length > cap) {
+                obs.rawMessages.shift();
+            }
             obs.msgCount += 1;
             obs.lastSpeak = now;
 
@@ -176,8 +192,12 @@ export class Context {
             const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
 
             if (needUpdate || (staleImpression && obs.rawMessages.length > 0)) {
-                await ai.memory.updateImpression(uid);
-                obs.rawMessages = [];
+                const success = await ai.memory.updateImpression(uid);
+                if (success) {
+                    obs.rawMessages = [];
+                } else {
+                    obs.rawMessages.shift();
+                }
             }
         }
 
@@ -248,7 +268,10 @@ export class Context {
                 round++;
             }
             if (round > maxRounds) {
-                messages.splice(0, i);
+                const removed = messages.splice(0, i);
+                for (const msg of removed) {
+                    if (msg.images) msg.images.length = 0;
+                }
                 break;
             }
         }

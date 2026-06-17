@@ -489,7 +489,7 @@ export class MemoryManager {
     }
 
     /** 为指定用户更新印象（Tier 2） */
-    async updateImpression(uid: string): Promise<void> {
+    async updateImpression(uid: string): Promise<boolean> {
       const obs = this.observations[uid];
       if (!obs || obs.rawMessages.length < 3) return;
 
@@ -532,8 +532,10 @@ export class MemoryManager {
           };
           logger.info('印象更新: ' + uid + ' → ' + this.impressions[uid].text);
         }
+        return true;
       } catch (e: any) {
         logger.error('印象更新失败 (' + uid + '): ' + (e?.message || e));
+        return false;
       }
     }
 
