@@ -194,10 +194,10 @@ export class ToolManager {
         registerRename();
         registerAttr();
         registerBan();
-        registerRecord();
+        // registerRecord();
         registerTime();
         registerWeb();
-        registerImage();
+        // registerImage();
         registerGroupSign();
         registerGetPersonInfo();
         registerMessage();

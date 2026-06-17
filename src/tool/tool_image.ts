@@ -39,6 +39,7 @@ export function registerImage() {
         return { content: image.content || '图片识别失败', images: [] };
     }
 
+    /*
     const toolTTI = new Tool({
         type: 'function',
         function: {
@@ -128,6 +129,7 @@ export function registerImage() {
             return { content: `图像生成失败：${e}`, images: [] };
         }
     }
+    */
 
     const toolListImages = new Tool({
         type: 'function',

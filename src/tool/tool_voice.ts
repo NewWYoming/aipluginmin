@@ -31,6 +31,7 @@ const characterMap = {
 export function registerRecord() {
     const { recordPathMap } = ConfigManager.tool;
 
+    /*
     if (Object.keys(recordPathMap).length !== 0) {
         const toolRecord = new Tool({
             type: "function",
@@ -61,6 +62,7 @@ export function registerRecord() {
             }
         }
     }
+    */
 
     const toolTTS = new Tool({
         type: 'function',
