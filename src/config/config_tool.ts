@@ -15,8 +15,6 @@ export class ToolConfig {
         ], "修改后保存并重载js");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "默认关闭的函数", [
             'rename',
-            'record',
-            'text_to_image',
             'set_trigger_condition',
             'music_play'
         ], "");
