@@ -44,7 +44,7 @@ export function registerTTS() {
                 url = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
                 const model = 'cosyvoice-v3-flash';
                 const input: any = { text, voice: ttsVoice };
-                if (ttsExtraBody) {
+                if (ttsExtraBody && typeof ttsExtraBody === 'string' && ttsExtraBody.trim()) {
                     try {
                         Object.assign(input, JSON.parse(ttsExtraBody));
                     } catch {
