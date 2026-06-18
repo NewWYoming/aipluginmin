@@ -50,8 +50,9 @@ For debugging, investigation, and non-trivial fixes, the preferred pattern is:
 2. **Analyze & Plan** — present findings; write implementation plan with exact file paths, code changes, and impact analysis.
 3. **Independent review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. Update plan based on findings.
 4. **Implement** — dispatch `@fixer` with the full plan and precise instructions. Single responsible fixer per plan.
-5. **Verify & Commit** — run `npm run build`, commit with descriptive message, update codemap files.
-6. **Reconcile** — check all background tasks completed; reconcile any file conflicts from parallel agents.
+5. **Verify & Commit** — run `npm run build`, commit with descriptive message.
+6. **Update codemap** — load the `codemap` skill, run change detection, dispatch fixers to update affected `codemap.md` files, run `update` to save state, commit.
+7. **Reconcile** — check all background tasks completed; reconcile any file conflicts from parallel agents.
 
 Example of this flow in practice: vector dead code cleanup → Jina EOF debugging → timezone fix. Each followed: research (subagent) → write plan → oracle review → implement (fixer) → commit + codemap update.
 
@@ -74,7 +75,7 @@ When a code review or investigation surfaces **multiple bugs/issues** (5+), do n
    c. **Oracle review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. **Mandatory.** Update plan based on findings.
    d. **Implement** — dispatch `@fixer` with the reviewed plan
    e. **Verify** — `npm run build`
-   f. **Commit** — record commit hash in tracking document
+    f. **Commit + Codemap** — record commit hash in tracking document, then update codemap files (load `codemap` skill, detect changes, dispatch fixers, save state, commit).
 
 4. **Update tracking document** — after each commit, update the progress markers:
    - `⬜` → `🔄` when work begins
