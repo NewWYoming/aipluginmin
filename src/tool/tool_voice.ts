@@ -78,7 +78,7 @@ export function registerTTS() {
                     break;
                 } catch (e: any) {
                     if (attempt === 2) throw e;
-                    logger.warn(`TTS 请求失败，重试 ${attempt + 1}/2: ${e?.message || e}`);
+                    logger.warning(`TTS 请求失败，重试 ${attempt + 1}/2: ${e?.message || e}`);
                     await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
                 }
             }
