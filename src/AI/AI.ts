@@ -166,6 +166,7 @@ export class AI {
         });
 
         const messages = await handleMessages(ctx, this) as OpenAIMessage[];
+        AIManager.saveAI(this.id);
         const tools = isTool ? this.tool.getToolsInfo(msg.messageType) : null;
 
         if (isTool && tools) {

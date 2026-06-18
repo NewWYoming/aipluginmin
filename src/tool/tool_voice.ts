@@ -36,27 +36,26 @@ export function registerTTS() {
             return { content: '文本为空，无法合成语音', images: [] };
         }
 
-        const { ttsApiKey, ttsProvider, ttsVoice, ttsExtraBody } = ConfigManager.backend;
+        const { ttsApiKey, ttsVoice, ttsExtraBody, ttsModel } = ConfigManager.backend;
 
         try {
-            let url: string, body: any;
-            if (ttsProvider === '阿里云 DashScope') {
-                url = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer';
-                const model = 'cosyvoice-v3-flash';
-                const input: any = { text, voice: ttsVoice };
-                if (ttsExtraBody && typeof ttsExtraBody === 'string' && ttsExtraBody.trim()) {
-                    try {
-                        Object.assign(input, JSON.parse(ttsExtraBody));
-                    } catch {
-                        logger.warning('TTS 额外参数 JSON 解析失败，已忽略');
-                    }
+            const model = ttsModel || 'qwen3-tts-flash';
+            const isCosyVoice = model.startsWith('cosyvoice');
+            const endpoint = isCosyVoice
+                ? 'services/audio/tts/SpeechSynthesizer'
+                : 'services/aigc/multimodal-generation/generation';
+            const url = `https://dashscope.aliyuncs.com/api/v1/${endpoint}`;
+            const input: any = { text, voice: ttsVoice };
+            if (ttsExtraBody && typeof ttsExtraBody === 'string' && ttsExtraBody.trim()) {
+                try {
+                    Object.assign(input, JSON.parse(ttsExtraBody));
+                } catch {
+                    logger.warning('TTS 额外参数 JSON 解析失败，已忽略');
                 }
-                body = { model, input };
-            } else {
-                return { content: `不支持的服务商: ${ttsProvider}`, images: [] };
             }
+            const body = { model, input };
 
-            logger.info(`TTS 请求: provider=${ttsProvider}, voice=${ttsVoice}, text=${text.slice(0, 30)}`);
+            logger.info(`TTS 请求: model=${model}, voice=${ttsVoice}, text=${text.slice(0, 30)}`);
 
             // 内联重试（body 消费在循环内，防止 goproxy H2 EOF）
             let data: any;
