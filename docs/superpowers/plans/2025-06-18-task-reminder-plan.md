@@ -359,7 +359,7 @@ static timerFires(taskId: string): void {
   }
   
   // 注入润色配置
-  const polishHint = ConfigManager.memory.get?.('任务提醒润色提示') || '用亲切自然的语气提醒用户';
+  const polishHint = ConfigManager.memory.taskReminderPolish || '用亲切自然的语气提醒用户';
   
   const systemMsg = `你是任务提醒助手。${polishHint}\n\n以下是一条任务提醒，请用自然语气转述：\n${template}`;
   
@@ -1101,3 +1101,31 @@ git commit -m "feat: task reminder system complete — v5.1.11"
 | 类型一致性 | ✅ Task 接口在 Task 1 定义，Task 5/6 引用一致 |
 | 循环依赖处理 | ✅ Task 7 使用 `require()` 延迟导入 |
 | 现有 set_timer 兼容 | ✅ 新参数可选，旧参数保留 |
+
+---
+
+## 附录：Oracle 审查修正项
+
+实施时务必修正：
+
+### 🔴 必须
+
+1. **配置键访问错误**：`timerFires` 中用 `ConfigManager.memory.taskReminderPolish`（camelCase），非 `['任务提醒润色提示']`
+
+2. **重启重复定时器**：`createAlarm` 用 `task.assignedTimerId` + `TimerManager.getTimers` 检查已有活跃定时器
+
+3. **清理周期任务**：`cleanupExpired` 同时清理 `completed=true` 且 3 天前完成的周期任务
+
+### 🟠 强烈建议
+
+4. **截止更新重调度**：`updateTask` 改 deadline 时取消旧闹钟 + 创建新闹钟
+
+5. **短 ID 提取**：`resolveTaskId()` 辅助函数，避免 update/delete 重复循环
+
+6. **timer.ts 集成**：`content.startsWith('__TASK_')` 处提取 taskId 用 `slice(7, -2)`，含 require('./task') 延迟导入
+
+### 🟡 可延后
+
+7. **时区**：`parseDeadline` 用本地时区，假设 UTC+8
+
+8. **计划噪音**：第 250-378 行为推导过程，以最终代码为准
