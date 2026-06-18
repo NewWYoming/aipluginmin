@@ -89,8 +89,9 @@ When a code review or investigation surfaces **multiple bugs/issues** (5+), do n
 ## SealDice API
 
 - **`types/seal.d.ts`** declares the SealDice runtime types (provided globally, no import needed). The file is **incomplete**.
-- If you need an API not covered here, check the SealDice source: `https://github.com/sealdice/sealdice-core`
-- Key patterns: plugin registers via `seal.ext.new()`, configs via `seal.ext.registerStringConfig()` etc., hooks via `ext.onNotCommandReceived` / `ext.onCommandReceived` / `ext.onMessageSend`.
+- **`E:\documents\study_doc\cs\bot\sealdocu.md`** is the authoritative API reference. Check this document first when unsure about any SealDice API signature.
+- If you need an API not covered by either source, check the SealDice source: `https://github.com/sealdice/sealdice-core`
+- Key patterns: plugin registers via `seal.ext.new()`, configs via `seal.ext.registerStringConfig()` / `seal.ext.getStringConfig()`, hooks via `ext.onNotCommandReceived` / `ext.onCommandReceived` / `ext.onMessageSend`.
 
 ## Architecture
 

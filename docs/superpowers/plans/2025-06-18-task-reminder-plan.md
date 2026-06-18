@@ -931,7 +931,7 @@ git commit -m "feat: task reminder system complete — v5.1.11"
 | 检查项 | 状态 |
 |--------|:--:|
 | 覆盖所有设计需求 | ✅ Task 模型、Cron、AI 工具、用户指令、润色配置、排队机制 |
-| config 键名正确 | ✅ `ConfigManager.memory.taskReminderPolish`；注意验证 `seal.ext.getStringConfig` API，如不存在改用 `getTemplateConfig(...)[0]` |
+| config 键名正确 | ✅ `ConfigManager.memory.taskReminderPolish`；`seal.ext.getStringConfig` 确认存在（sealdocu.md L90） |
 | 防重复定时器 | ✅ `createAlarm` 检查 `TimerManager.getTimers`；`assignedTimerId` 为辅助标记 |
 | 完成任务清理定时器 | ✅ `updateTask` completed=true 时调用 `removeTimers` |
 | 周期任务清理 | ✅ `cleanupExpired` 同时清理 deadline 过期和 completed 旧任务（createdAt 近似，可后续加 completedAt） |
