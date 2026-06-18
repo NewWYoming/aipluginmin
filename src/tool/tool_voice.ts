@@ -41,7 +41,7 @@ export function registerTTS() {
         try {
             let url: string, body: any;
             if (ttsProvider === '阿里云 DashScope') {
-                url = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+                url = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer';
                 const model = 'cosyvoice-v3-flash';
                 const input: any = { text, voice: ttsVoice };
                 if (ttsExtraBody && typeof ttsExtraBody === 'string' && ttsExtraBody.trim()) {
