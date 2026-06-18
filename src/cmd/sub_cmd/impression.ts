@@ -3,50 +3,60 @@ import { aliasToCmd } from '../../utils/utils';
 import { M, U } from '../privilege';
 import { SubCmd, SubCmdContext } from '../root';
 
+/** 从位置参数解析 QQ 号：纯数字加前缀，已含 QQ: 直接返回 */
+function parseQQFromArg(arg: string): string | null {
+  if (!arg) return null;
+  if (/^QQ:\d{5,}$/.test(arg)) return arg;
+  if (/^\d{5,}$/.test(arg)) return `QQ:${arg}`;
+  return null;
+}
+
 export function registerCmdImpression(): void {
   const cmd = new SubCmd('impression');
   cmd.desc = '查看用户印象';
   cmd.priv = { priv: U, args: { all: { priv: M } } };
   cmd.help = `【.ai impression】查看当前会话中自己的印象
-【.ai impression @用户】查看当前会话中某用户的印象
-【.ai impression all @用户】跨群查看某用户在所有群组的印象（骰主）`;
+【.ai impression @用户 或 QQ号】查看指定用户的印象
+【.ai impression all @用户 或 QQ号】跨群查看某用户在所有群组的印象（骰主）`;
   cmd.solve = (scc: SubCmdContext) => {
-    const { ctx, msg, cmdArgs, epId, sid, ai, ret } = scc;
+    const { ctx, msg, cmdArgs, epId, ai, ret } = scc;
     const val2 = cmdArgs.getArgN(2);
 
     switch (aliasToCmd(val2)) {
       case 'all': {
         // 跨群搜索 —— 需要骰主权限
-        let targetUid: string;
-        if (cmdArgs.at.length === 0) {
-          seal.replyToSender(ctx, msg, '请@一个用户以查看其跨群印象');
+        const val3 = cmdArgs.getArgN(3);
+        const targetUid = resolveTargetUid(cmdArgs, epId, ctx, val3);
+        if (!targetUid) {
+          seal.replyToSender(ctx, msg, '请@一个用户或提供QQ号以查看其跨群印象');
           return ret;
-        } else if (cmdArgs.at.length === 1 && cmdArgs.at[0].userId !== epId) {
-          targetUid = cmdArgs.at[0].userId;
-        } else {
-          const mctx = seal.getCtxProxyFirst(ctx, cmdArgs);
-          targetUid = mctx.player.userId;
         }
         return showCrossImpressions(ctx, msg, targetUid, ret);
       }
       default: {
         // 默认：查看当前会话中某用户的印象
-        let targetUid: string;
-        if (cmdArgs.at.length === 0) {
-          // 没 @，查看自己
-          targetUid = scc.uid;
-        } else if (cmdArgs.at.length === 1 && cmdArgs.at[0].userId !== epId) {
-          // @单个非机器人用户
-          targetUid = cmdArgs.at[0].userId;
-        } else {
-          // @了机器人或多人，取 proxy 中的目标用户
-          const mctx = seal.getCtxProxyFirst(ctx, cmdArgs);
-          targetUid = mctx.player.userId;
-        }
+        const targetUid = resolveTargetUid(cmdArgs, epId, ctx, val2) || scc.uid;
         return showImpression(ctx, msg, ai, targetUid, ret);
       }
     }
   };
+}
+
+/** 解析目标用户 ID：@ > QQ号 > null */
+function resolveTargetUid(
+  cmdArgs: seal.CmdArgs,
+  epId: string,
+  ctx: seal.MsgContext,
+  arg: string
+): string | null {
+  if (cmdArgs.at.length === 1 && cmdArgs.at[0].userId !== epId) {
+    return cmdArgs.at[0].userId;
+  }
+  if (cmdArgs.at.length > 0) {
+    const mctx = seal.getCtxProxyFirst(ctx, cmdArgs);
+    return mctx.player.userId;
+  }
+  return parseQQFromArg(arg);
 }
 
 function showImpression(
