@@ -31,28 +31,28 @@ export function registerTime() {
                 properties: {
                     types: {
                         type: 'string',
-                        description: '定时器类型。target: 在指定的绝对日期时间触发（年月日时分构成具体时刻）。interval: 每隔指定时长重复触发。',
+                        description: '定时器类型。target: 在指定时间触发（搭配datetime或seconds使用）。interval: 每隔指定时长重复触发。',
                         enum: ['target', 'interval']
                     },
                     years: {
                         type: 'integer',
-                        description: '年数'
+                        description: '年数（已弃用，建议用datetime或seconds代替）'
                     },
                     months: {
                         type: 'integer',
-                        description: '月数'
+                        description: '月数（已弃用，建议用datetime或seconds代替）'
                     },
                     days: {
                         type: 'integer',
-                        description: '天数'
+                        description: '天数（已弃用，建议用datetime或seconds代替）'
                     },
                     hours: {
                         type: 'integer',
-                        description: '小时数'
+                        description: '小时数（已弃用，建议用datetime或seconds代替）'
                     },
                     minutes: {
                         type: 'integer',
-                        description: '分钟数'
+                        description: '分钟数（已弃用，建议用datetime或seconds代替）'
                     },
                     datetime: {
                         type: 'string',
@@ -71,7 +71,7 @@ export function registerTime() {
                         description: '触发时给自己的的提示词'
                     }
                 },
-                required: ['types', 'minutes', 'content']
+                required: ['types', 'content']
             }
         }
     });
@@ -91,6 +91,11 @@ export function registerTime() {
             }
         } else if (seconds) {
             y = 0; m = 0; d = 0; h = 0; min = Math.ceil(seconds / 60);
+        }
+
+        // 检查是否提供了时间参数（datetime/seconds/minutes 至少一个）
+        if (!datetime && !seconds && minutes === undefined) {
+            return { content: '请指定时间：用 datetime（如"2025-06-25 08:00"）表示具体时刻，或用 seconds（如 3600）表示多少秒后', images: [] };
         }
 
         if (isNaN(y)) return { content: '年数应为数字', images: [] };
