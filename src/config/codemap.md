@@ -18,16 +18,16 @@ Configuration registration and management for the `aiplugin4` SealDice plugin. T
 Each feature area has a dedicated file with a class that follows a uniform interface:
 
 | File | Class | SealDice Extension Name | Purpose |
-|---|---|---|---|
+|---|---|---|---|---|
 | `config_log.ts` | `LogConfig` | `aiplugin4` | Log verbosity |
-| `config_request.ts` | `RequestConfig` | `aiplugin4` | API provider, URL, key, model, thinking, body |
-| `config_message.ts` | `MessageConfig` | `aiplugin4_1:对话` | Role settings, system prompt template (incl. impression layer), history, timezone offset |
-| `config_tool.ts` | `ToolConfig` | `aiplugin4_2:函数调用` | Function-calling, voice, decks |
+| `config_request.ts` | `RequestConfig` | `aiplugin4` | API provider, URL, key, model, thinking, body, memory model |
+| `config_message.ts` | `MessageConfig` | `aiplugin4_1:对话` | Role switching (roleSettingNames/roleSettingTemplate), system prompt template (incl. impression layer), history, timezone offset |
+| `config_tool.ts` | `ToolConfig` | `aiplugin4_2:函数调用` | Function-calling (toolsDefaultClosed, maxCallCount), voice, decks |
 | `config_received.ts` | `ReceivedConfig` | `aiplugin4_3:消息接收与触发` | Trigger conditions, ignore patterns, rate limits |
 | `config_reply.ts` | `ReplyConfig` | `aiplugin4_4:回复` | Reply filtering, anti-repeat, regex processing |
 | `config_image.ts` | `ImageConfig` | `aiplugin4_5:图片` | Image recognition, storage, sending |
-| `config_backend.ts` | `BackendConfig` | `aiplugin4_6:后端` | External service URLs (stream, search, render, Jina API Key) |
-| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory, knowledge base, impressions (vector/embedding config removed) |
+| `config_backend.ts` | `BackendConfig` | `aiplugin4_6:后端` | External service URLs (stream, search, render, Jina API Key), TTS provider routing (DashScope/CosyVoice) |
+| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory (memoryLimit, memoryShowNumber, memoryShowTemplate), knowledge base, impressions (impressionMaxLength, cleanupInactiveDays); vector/embedding config removed |
 | `sample.ts` | `SampleConfig` | `aiplugin4_0:示例` | Reference example (disabled in production) |
 
 Each class has:
@@ -58,7 +58,7 @@ Each config group registers under a different SealDice extension name (e.g. `aip
 
 ### Backward-Compatible Config Parsing
 
-`RequestConfig.get()` parses the legacy `body` template lines (which contained raw JSON fragments like `"model":"deepseek-v4-pro"`) and extracts `model`, `maxTokens`, `temperature`, `topP`, and unknown extras into `extraBody`. New V5 config fields (`apiProvider`, `thinkingEnabled`, etc.) coexist alongside.
+`RequestConfig.get()` parses the legacy `body` template lines (which contained raw JSON fragments like `"model":"deepseek-v4-pro"`) and extracts `model`, `maxTokens`, `temperature`, `topP`, and unknown extras into `extraBody`. New V5 config fields (`apiProvider`, `thinkingEnabled`, `memoryModel`) coexist alongside.
 
 ---
 
@@ -67,15 +67,15 @@ Each config group registers under a different SealDice extension name (e.g. `aip
 ```
 Plugin startup (src/index.ts → main())
   └─ ConfigManager.registerConfig()
-       ├─ LogConfig.register()          → creates "aiplugin4" ext, registers 1 option
-       ├─ RequestConfig.register()      → reuses "aiplugin4" ext, registers ~8 keys
-       ├─ MessageConfig.register()      → creates "aiplugin4_1:对话" ext, registers ~12 keys (added utcOffset)
-       ├─ ToolConfig.register()          → creates "aiplugin4_2:函数调用" ext, registers ~7 keys
+       ├─ LogConfig.register()          → reuses "aiplugin4" ext, registers 1 option
+       ├─ RequestConfig.register()      → reuses "aiplugin4" ext, registers 10 keys (added memoryModel, tool thinking/reasoning config)
+       ├─ MessageConfig.register()      → creates "aiplugin4_1:对话" ext, registers 12 keys (roleSettingNames/roleSettingTemplate for role switching, utcOffset)
+       ├─ ToolConfig.register()          → creates "aiplugin4_2:函数调用" ext, registers 7 keys (maxCallCount, toolsDefaultClosed)
        ├─ ReceivedConfig.register()      → creates "aiplugin4_3:消息接收与触发" ext, registers ~8 keys
        ├─ ReplyConfig.register()         → creates "aiplugin4_4:回复" ext, registers ~6 keys
        ├─ ImageConfig.register()         → creates "aiplugin4_5:图片" ext, registers ~9 keys
-       ├─ BackendConfig.register()       → creates "aiplugin4_6:后端" ext, registers 7 keys (added jinaApiKey)
-       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers ~12 keys (5 vector keys removed)
+       ├─ BackendConfig.register()       → creates "aiplugin4_6:后端" ext, registers 12 keys (added Jina API Key + TTS config: ttsModel, ttsProvider, ttsVoice, ttsApiKey, ttsEnabled, ttsExtraBody)
+       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers 12 keys (memoryLimit, memoryShowNumber, memoryShowTemplate, memorySingleShowTemplate, knowledgeMemoryShowNumber, impressionMaxLength, cleanupInactiveDays; 5 vector keys removed)
        └─ SampleConfig.register()        → creates "aiplugin4_0:示例" ext, registers 1 key
 
 Runtime access (any module):
