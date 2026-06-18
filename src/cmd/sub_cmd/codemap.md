@@ -22,11 +22,11 @@ The subcommand system acts as a CLI router: the parent `cmd/root.ts` `registerCm
 | **off** | `off.ts` | I | Disable AI entirely or selectively turn off specific trigger modes via kwargs. Resets all trigger counters. |
 | **standby** | `standby.ts` | I | Enable standby mode — AI records conversation passively without replying. |
 | **status** | `status.ts` | U | Display current AI state: privilege level, context rounds, trigger mode statuses, active time window, standby mode. |
-| **forget** | `forget.ts` | I (root) | Clear conversation context. Sub-options: `assistant` (clear AI/tool messages), `user` (clear user messages), default clears all. |
+| **forget** | `forget.ts` | I (root) | Clear conversation context. Sub-options: `assistant` (clear AI/tool messages), `user` (clear user messages), default clears all (only full clear resets AI state; targeted clears leave state intact). |
 | **memory** | `memory.ts` | U (root) | Manage long-term (`private`/`group`) and short-term memory. CRUD operations: set/delete/list/clear. Also supports persona settings and `sum` (force summarization into short-term memory). |
 | **image** | `image.ts` | U (root) | Image pool operations: list stolen/local images, clear stolen pool, image-to-text (`itt`), find image by ID. |
-| **ctxn** | `ctxn.ts` | U (root) | Context name management: view names, set to nickname/card, enable auto-name-modification (0/1/2). |
-| **tool** | `tool.ts` | U (root) | Tool function management: list all tools with on/off status, toggle individual tools, view tool help/params, manually call a tool function via `call`. |
+| **ctxn** | `ctxn.ts` | U (root) | Context name management: view names, set to nickname/card, enable auto-name-modification (0/1/2). Persists AI state via `AIManager.saveAI()` on `set` and `mod`. Solve is async. |
+| **tool** | `tool.ts` | U (root) | Tool function management: list all tools with on/off status, toggle individual tools, view tool help/params, manually call a tool function via `call` (with `toolsNotAllow` deny-list + `tool.type` safety checks). |
 | **token** | `token.ts` | S (root) | Token usage tracking: list models, view per-model/per-period usage, year/month charts (image generation), clear usage records. |
 | **timer** | `timer.ts` | U (root) | Timer management: list active timers, clear all timers for the current session. |
 | **privilege** | `privilege.ts` | M (root) | Permission management: set/check session permissions, set/show/reset command-level permissions. |
@@ -48,3 +48,23 @@ The subcommand system acts as a CLI router: the parent `cmd/root.ts` `registerCm
 - **`ToolManager`** (`tool/tool.ts`): Used by `tool.ts` for listing, inspecting, and calling tool functions.
 - **`ImageManager`** (`AI/image.ts`): Used by `image.ts` for local image operations.
 - **`utils/utils.ts` — `aliasToCmd()`**: Central normalization function used by nearly all subcommands for matching user input to canonical command names.
+
+## 5. Recent Refactoring
+
+### token.ts — Extracted helper functions (~126 lines removed)
+
+Three module-level helpers were extracted to eliminate duplicated year/month aggregation logic (384 → 258 lines):
+
+- `aggregateModelEntries()` — groups model usage entries by period
+- `mergeAggResults()` — merges per-period aggregation results
+- `formatUsageReport()` — formats aggregated data into the display report
+
+Also fixed ISO key formatting (proper `padStart` zero-padding) and simplified sorting.
+
+### memory.ts — Extracted `handleMemoryScope()` (~70 lines removed)
+
+The `handleMemoryScope()` function with a `MemoryScopeConfig` interface replaces ~70 lines of duplicated private/group branch code (219 → 189 lines). Also fixed reply text indentation in 4 places (converted multi-line template literals to `\n` concatenation).
+
+### status.ts — Indentation fix
+
+Converted multi-line reply template literal to `\n` concatenation for consistent formatting.
