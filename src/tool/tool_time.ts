@@ -107,7 +107,9 @@ export function registerTime() {
 
         switch (types) {
             case 'target': {
-                const t = new Date(y, m - 1, d, h, min).getTime();
+                // 将用户输入的时间视为用户时区（如北京时间），转为 UTC 时间戳
+                const userTimeMs = Date.UTC(y, m - 1, d, h, min);
+                const t = userTimeMs - ConfigManager.message.utcOffset * 3600 * 1000;
                 const now = Date.now();
                 if (isNaN(t)) {
                     return { content: '时间设置错误', images: [] };
