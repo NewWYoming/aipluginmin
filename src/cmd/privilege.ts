@@ -104,12 +104,22 @@ export class PrivilegeManager {
 
             const cpi = cp[cmd] || cp["*"];
 
+            // 权限通过后，仅当下级命令在 args 中有定义时才递归
+            function checkNext(): { success: boolean, exist: boolean } {
+                if (!cpi.args) return { success: true, exist: true };
+                const nextCmd = cmdChain[i + 1];
+                if (nextCmd !== undefined && (cpi.args.hasOwnProperty(nextCmd) || cpi.args.hasOwnProperty('*'))) {
+                    return checkCmdPriv(cpi.args, i + 1);
+                }
+                return { success: true, exist: true }; // 继承父级权限
+            }
+
             if (sessionPriv >= cpi.priv[0] && userPriv >= cpi.priv[1]) {
-                return cpi.args ? checkCmdPriv(cpi.args, i + 1) : { success: true, exist: true };
+                return checkNext();
             }
 
             if (userPriv >= cpi.priv[2]) {
-                return cpi.args ? checkCmdPriv(cpi.args, i + 1) : { success: true, exist: true };
+                return checkNext();
             }
 
             return { success: false, exist: true };
