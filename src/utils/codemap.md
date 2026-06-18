@@ -38,8 +38,8 @@ Shared utility functions consumed across the plugin: ID generation, message form
 | `buildSystemMessage` | Constructs the system prompt by rendering the `systemMessageTemplate` with current context (platform, user, group, role, knowledge, memory). |
 | `buildSamplesMessages` | Converts config `samples` (flat string array, even=user odd=assistant) into `Message[]` for few-shot prompting. |
 | `buildContextMessages` | Periodically re-inserts the system message into conversational context (every `insertCount` user turns) to reinforce behavior. |
-| `handleMessages` | **Main pipeline**: calls the three builders above, prunes orphaned `tool_calls` (where no corresponding `role: 'tool'` message exists), merges consecutive same-role messages when `isMerge` is on. |
-| `buildContent` | Serializes a `Message` to plain text with optional prefix, message ID, and timestamp markers. |
+| `handleMessages` | **Main pipeline**: calls the three builders above, prunes orphaned `tool_calls` (where no corresponding `role: 'tool'` message exists) and removes the tool-call message entirely if empty, merges consecutive same-role messages when `isMerge` is on. |
+| `buildContent` | Serializes a `Message` to plain text with optional prefix, message ID, and timestamp markers (timezone-aware via `utcOffset`). |
 | `getRoleSetting` | Reads `$gSYSPROMPT` variable (string or int) and resolves to a role setting template. |
 
 ### `utils_ob11.ts` — OneBot v11 API

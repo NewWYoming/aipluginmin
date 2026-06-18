@@ -10,7 +10,7 @@ The single registered SealDice command is `.ai`. All sub-commands are dispatched
 
 | File | Purpose |
 |------|---------|
-| `root.ts` | Defines `SubCmd` base class + `SubCmdContext` interface; registers the `.ai` SealDice command; orchestrates sub-command discovery and dispatch |
+| `root.ts` | Defines `SubCmd` base class + `SubCmdContext` interface; registers the `.ai` SealDice command; orchestrates sub-command discovery and dispatch. Aggregates all subcommand `CmdPrivInfo` into `defaultCmdPriv` at registration. Guards private chat with `disabledInPrivate` check. Parses `--page=N` from kwargs. |
 | `privilege.ts` | Declares `CmdPrivInfo` tree structure; implements `PrivilegeManager` for cascading session/user permission checks |
 | `sub_cmd/on.ts` | `.ai on [--c=10] [--t=60] [--p=10] [--a=09:00-18:00-5]` — Activate AI with counter/timer/probability/active-time triggers |
 | `sub_cmd/off.ts` | `.ai off [--c] [--t] [--p] [--a]` — Deactivate AI or disable individual trigger modes |
@@ -80,11 +80,17 @@ User: .ai on --c=10
   ↓
 SealDice: cmd.solve(ctx, msg, cmdArgs)
   ↓
-root.ts: parse args → extract sid, page, validate
+root.ts: [disabledInPrivate? → return "私聊AI功能已禁用"]
+  ↓
+root.ts: extract epId, uid, gid, sid (scope-aware: private=uid, group=gid)
+  ↓
+root.ts: parse --page=N (default 1) from kwargs
+  ↓
+root.ts: AIManager.getAI(sid) → session-scoped AI instance
   ↓
 root.ts: PrivilegeManager.checkPriv() → session+user permission gate
   ↓
-root.ts: SubCmd.map['on'].solve(scc)
+root.ts: SubCmd.map['on'].solve(scc) — priv pre-aggregated into defaultCmdPriv
   ↓
 sub_cmd/on.ts: parse kwargs, set ai.setting.{counter,timer,prob,activeTimeInfo}
   ↓

@@ -6,7 +6,7 @@
 
 | Entry | Role |
 |-------|------|
-| `src/index.ts` | Plugin main — registers SealDice hooks, routes incoming messages to AI |
+| `src/index.ts` | Plugin main — registers SealDice hooks, routes incoming messages to AI, manages AI lifecycle (disabledInPrivate guard, private instance eviction), polls checkActiveTimer in all hooks |
 | `header.txt` | UserScript metadata prepended to bundled output |
 | `tools/build.js` | esbuild build script — bundles, prepends header, auto-backs up old dist |
 | `src/config/config.ts` | Global constants: VERSION, AUTHOR, NAME, CQ type allowlist, privilege levels |
@@ -15,7 +15,7 @@
 
 | Directory | Responsibility | Codemap |
 |-----------|---------------|---------|
-| `src/` | Plugin entry (hooks wiring), logger, timer system, version update | [📄](src/codemap.md) |
+| `src/` | Plugin entry (hooks wiring, AI lifecycle, disabledInPrivate guard), logger, timer system, version update | [📄](src/codemap.md) |
 | `src/AI/` | Core AI: chat orchestration, context/memory management, image pool, session management | [📄](src/AI/codemap.md) |
 | `src/config/` | SealDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
 | `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
@@ -28,6 +28,11 @@
 ## Architecture Overview
 
 ```
+AI lifecycle (all hooks):
+  disabledInPrivate guard → early return / evict private instances
+  checkActiveTimer() → daily impression cleanup + active-time scheduling
+
+Message processing:
 onNotCommandReceived → index.ts routes → AI.chat()
   → handleMessages() assembles system prompt + context + POV-scoped memories + impressions
   → ToolCallLoop (thinking-enabled) iterates tool calls via AIClient
@@ -37,6 +42,7 @@ onNotCommandReceived → index.ts routes → AI.chat()
 
 Config system:
   ConfigManager (singleton) → domain config classes → SealDice ext.register*Config() → typed get() with 3s TTL cache
+  TTS: ConfigManager.backend.tts{Enabled,Provider,ApiKey,Voice,Model,ExtraBody} → tool_voice.ts routing
 
 Session model:
   AIManager.getAI(sid) → per-session AI instance (private=uid, group=gid)

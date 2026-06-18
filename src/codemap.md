@@ -8,7 +8,7 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 
 | File | Role |
 |------|------|
-| `index.ts` | **Plugin entry.** `main()` registers configs, tools, commands, timers, and memory. Wires three SealDice hooks: `onNotCommandReceived`, `onCommandReceived`, `onMessageSend`, and `onPoke`. |
+| `index.ts` | **Plugin entry.** `main()` registers configs, tools, commands (`registerTTS()` for TTS), timers (`TimerManager.init()`), and memory. Wires three SealDice hooks with AI lifecycle management: `disabledInPrivate` guard + `checkActiveTimer()` poll in all hooks, `evictPrivateInstances()` on disable. |
 | `update.ts` | Changelog data (`updateInfo` map), consumed by the `.ai update` command. Not wired in `main()` — imported by commands. |
 
 ### Subdirectories (each has its own codemap.md)
@@ -47,19 +47,25 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 ```
 SealDice Event
     │
-    ├── onNotCommandReceived ──→ filter (ignoreRegex, CQTypes)
-    │                               │
-    │                               ├── triggerRegex match → ai.chat("非指令")
-    │                               ├── triggerConditionMap match → ai.chat("AI设定触发条件")
-    │                               └── standby/prob/counter/timer → ai.chat("计数器/概率/计时器")
+    ├── onNotCommandReceived
+    │     ├── [disabledInPrivate? → return] (evictPrivateInstances first time)
+    │     ├── checkActiveTimer() → active-time scheduling + daily cleanup
+    │     ├── filter (ignoreRegex, CQTypes)
+    │     │     ├── triggerRegex match → ai.chat("非指令")
+    │     │     ├── triggerConditionMap match → ai.chat("AI设定触发条件")
+    │     │     └── standby/prob/counter/timer → ai.chat("计数器/概率/计时器")
     │
-    ├── onCommandReceived ──→ ToolManager.cmdArgs capture
-    │                           │
-    │                           └── allcmd && standby → ai.chat("指令消息")
+    ├── onCommandReceived
+    │     ├── [disabledInPrivate? → return]
+    │     ├── checkActiveTimer()
+    │     ├── ToolManager.cmdArgs capture
+    │     │     └── allcmd && standby → ai.chat("指令消息")
     │
-    ├── onMessageSend ──→ tool.listen.resolve (tool async listener)
-    │                       │
-    │                       └── allmsg && standby → ai.handleReceipt
+    ├── onMessageSend
+    │     ├── [disabledInPrivate? → return]
+    │     ├── checkActiveTimer()
+    │     ├── tool.listen.resolve (tool async listener)
+    │     │     └── allmsg && standby → ai.handleReceipt
     │
     └── onPoke ──→ rewrites as CQ:poke → routed to onNotCommandReceived
 ```
