@@ -174,16 +174,26 @@ export class TimerManager {
         if (timers.length === 0) return '';
         if (p > Math.ceil(timers.length / 10)) p = Math.ceil(timers.length / 10);
         return timers.slice((p - 1) * 10, p * 10).map((t, i) => {
+            // 任务定时器显示友好名称
+            let content = t.content;
+            if (content && content.startsWith('__TASK_') && content.endsWith('__')) {
+                try {
+                    const { TaskManager } = require('./task');
+                    const taskId = content.slice(7, -2);
+                    const task = TaskManager.getTaskById(taskId);
+                    content = task ? `任务: ${task.name}` : '任务提醒';
+                } catch { /* ignore */ }
+            }
             switch (t.type) {
                 case 'target': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}
-内容：${t.content}`;
+内容：${content}`;
                 case 'interval': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 间隔时间：${t.interval}秒
 剩余触发次数：${t.count === -1 ? '无限' : t.count - 1}
-内容：${t.content}`;
+内容：${content}`;
                 case 'activeTime': return `${i + 1 + (p - 1) * 10}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}`;
@@ -220,7 +230,7 @@ export class TimerManager {
                             if (timer.content && timer.content.startsWith('__TASK_')) {
                                 const taskId = timer.content.slice(7, -2);
                                 const { TaskManager } = require('./task');
-                                TaskManager.timerFires(taskId);
+                                await TaskManager.timerFires(taskId);
                                 continue;
                             }
 

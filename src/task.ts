@@ -251,7 +251,8 @@ function parseDeadline(deadline: string): number | null {
   const match = deadline.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/);
   if (!match) return null;
   const [, y, m, d, h = '0', min = '0'] = match;
-  return new Date(+y, +m - 1, +d, +h, +min).getTime() / 1000;
+  // Date.UTC treats input as UTC; subtract utcOffset to convert user-local → actual UTC
+  return Date.UTC(+y, +m - 1, +d, +h, +min) / 1000 - ConfigManager.message.utcOffset * 3600;
 }
 
 function parsePeriodNext(period: string, now: number): number | null {
@@ -259,9 +260,9 @@ function parsePeriodNext(period: string, now: number): number | null {
   if (dailyMatch) {
     const [, h, m] = dailyMatch;
     const d = new Date(now * 1000);
-    d.setHours(+h, +m, 0, 0);
-    if (d.getTime() / 1000 <= now) d.setDate(d.getDate() + 1);
-    return Math.floor(d.getTime() / 1000);
+    d.setUTCHours(+h, +m, 0, 0);
+    if (d.getTime() / 1000 <= now) d.setUTCDate(d.getUTCDate() + 1);
+    return Math.floor(d.getTime() / 1000) - ConfigManager.message.utcOffset * 3600;
   }
   const weeklyMatch = period.match(/^weekly@(mon|tue|wed|thu|fri|sat|sun)@(\d{2}):(\d{2})$/);
   if (weeklyMatch) {
@@ -269,10 +270,10 @@ function parsePeriodNext(period: string, now: number): number | null {
     const targetDay = dayMap[weeklyMatch[1]];
     const [, , h, m] = weeklyMatch;
     const d = new Date(now * 1000);
-    d.setHours(+h, +m, 0, 0);
-    const daysUntil = (targetDay - d.getDay() + 7) % 7;
-    d.setDate(d.getDate() + (daysUntil === 0 && d.getTime() / 1000 <= now ? 7 : daysUntil));
-    return Math.floor(d.getTime() / 1000);
+    d.setUTCHours(+h, +m, 0, 0);
+    const daysUntil = (targetDay - d.getUTCDay() + 7) % 7;
+    d.setUTCDate(d.getUTCDate() + (daysUntil === 0 && d.getTime() / 1000 <= now ? 7 : daysUntil));
+    return Math.floor(d.getTime() / 1000) - ConfigManager.message.utcOffset * 3600;
   }
   return null;
 }

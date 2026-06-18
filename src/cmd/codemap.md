@@ -22,6 +22,7 @@ The single registered SealDice command is `.ai`. All sub-commands are dispatched
 | `sub_cmd/token.ts` | `.ai token [list|sum|all|year|month|clear] [model] [chart]` — Token usage tracking and statistics |
 | `sub_cmd/tool.ts` | `.ai tool [on|off|help|call] [name] [--params]` — Enable/disable/list/invoke tool functions |
 | `sub_cmd/image.ts` | `.ai image [list|steal|itt|find]` — Image pool management, image-to-text, image lookup |
+| `sub_cmd/impression.ts` | `.ai impression [@user|all @user]` — View user impressions in current session or cross-group (all: master only) |
 | `sub_cmd/timer.ts` | `.ai timer [list|clear]` — View/clear per-session timers |
 | `sub_cmd/role.ts` | `.ai role <name>` — Switch character/persona preset |
 | `sub_cmd/prompt.ts` | `.ai prompt` — View current system prompt (master only) |

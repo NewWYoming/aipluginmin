@@ -20,6 +20,7 @@ import { registerCmdIgnore } from "./sub_cmd/ignore";
 import { registerCmdToken } from "./sub_cmd/token";
 import { registerCmdShut } from "./sub_cmd/shut";
 import { registerCmdTask } from "./sub_cmd/task";
+import { registerCmdImpression } from "./sub_cmd/impression";
 
 export interface SubCmdContext {
     ctx: seal.MsgContext;
@@ -70,6 +71,7 @@ export class SubCmd {
         registerCmdToken();
         registerCmdShut();
         registerCmdTask();
+        registerCmdImpression();
 
         defaultCmdPriv.ai.args = Object.values(SubCmd.map).reduce((acc, sc) => {
             acc[sc.name] = sc.priv;
