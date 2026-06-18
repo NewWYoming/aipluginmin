@@ -52,19 +52,73 @@ dailyCron() {
 
 ```
 timerFires(task) {
-  1. 检查任务是否已被完成/删除（可能被用户提前处理）
-  2. 按模板生成提醒文本（参考 GUGUtask 格式）：
-     ⏳ {任务名} (进度: {进度}%, 截止: {截止日期})
-     剩余时间：{剩余天数}天
-     {群聊时追加: [CQ:at,qq={被指派者QQ号}]}
-  3. 将模板作为 system 用户消息注入 AI 上下文：
-     ai.context.addSystemUserMessage("任务提醒", 模板文本, [])
-     发送者身份为"系统"，AI 视为来自系统用户的通知
-  4. AI 按 '任务提醒润色提示' 配置的方向润色后回复
-  5. 周期任务：重新计算下次触发时间，创建新闹钟
-  6. 倒计时任务：不自动完成，等待用户手动标记
+  1. 检查任务是否已被完成/删除
+  2. 按模板生成提醒文本（参考 GUGUtask 格式）
+  3. 注入到 AI 上下文（系统用户消息）
+  4. 调用 ai.enqueueReminder(ctx, msg) → 排队等待
 }
 ```
+
+### 2.3 排队发送机制（避免与正常对话冲突）
+
+在 `AI` 类中新增提醒队列：
+
+```typescript
+class AI {
+  pendingReminders: { ctx: MsgContext; msg: Message }[] = [];
+  
+  enqueueReminder(ctx, msg) {
+    this.pendingReminders.push({ ctx, msg });
+    // 如果 AI 当前空闲，立即触发
+    if (!this.isChatting) this.processNextReminder();
+  }
+  
+  async processNextReminder() {
+    if (this.pendingReminders.length === 0) return;
+    const { ctx, msg } = this.pendingReminders.shift()!;
+    await this.chat(ctx, msg, '任务提醒');
+  }
+}
+```
+
+**`chat()` 方法修改：** 两处改动：
+
+1. Bucket 限流豁免（与 `'函数回调触发'` 同级）：
+```typescript
+if (reason !== '函数回调触发' && reason !== '任务提醒') {
+    // bucket 检查...（任务提醒不消耗限流配额）
+}
+```
+
+2. 在 `isChatting = false` 之后处理排队：
+
+```typescript
+async chat(ctx, msg, reason) {
+  if (this.isChatting) return;
+  this.isChatting = true;
+  try { /* 现有聊天逻辑 */ }
+  finally {
+    this.isChatting = false;
+    this.processNextReminder();  // ← 新增：当前回复结束后立即处理排队提醒
+  }
+}
+```
+
+**完整时序：**
+
+```
+用户发消息 → AI 开始回复 (isChatting=true)
+    ↓ 此时闹钟触发
+timerFires → addSystemUserMessage → enqueueReminder
+    ↓ (AI 正忙，不立即触发)
+用户收到 AI 回复 (isChatting=false)
+    ↓ finally → processNextReminder
+AI 立即开始闹钟回复 (isChatting=true)
+    ↓ 按模板 + 润色配置生成
+群聊中发送：「⏳ 交报告 (进度: 30%, 截止: 2025-06-25) @小明 加油哦～」
+    ↓ (isChatting=false)
+```
+
 
 
 ---
@@ -255,6 +309,7 @@ parameters:
 | `src/task.ts` | Task 数据模型 + TaskManager CRUD + cron 调度 | **新建** |
 | `src/tool/tool_task.ts` | AI 工具：create/list/update/delete_task | **新建** |
 | `src/tool/tool_time.ts` | 优化 set_timer 参数 + 返回值 | **修改** |
+| `src/AI/AI.ts` | 增加 pendingReminders 队列 + processNextReminder | **修改** |
 | `src/cmd/sub_cmd/task.ts` | 用户指令：.ai task | **新建** |
 | `src/cmd/root.ts` | 注册 task 子命令 | **修改** |
 | `src/tool/tool.ts` | 注册新工具 | **修改** |
