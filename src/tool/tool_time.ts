@@ -1,5 +1,6 @@
 import { ConfigManager } from "../config/configManager";
 import { TimerManager } from "../timer";
+import { TaskManager } from "../task";
 import { fmtDate } from "../utils/utils_string";
 import { Tool } from "./tool";
 
@@ -184,19 +185,26 @@ export function registerTime() {
         }
 
         const s = timers.map((t, i) => {
+            // 任务定时器显示友好名称
+            let content = t.content;
+            if (content && content.startsWith('__TASK_') && content.endsWith('__')) {
+                const taskId = content.slice(7, -2);
+                const task = TaskManager.getTaskById(taskId);
+                content = task ? `任务: ${task.name}` : '任务提醒';
+            }
             switch (t.type as 'target' | 'interval') {
                 case 'target': {
                     return `${i + 1}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
-类型:${t.type}
-目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}
-内容：${t.content}`;
+ 类型:${t.type}
+ 目标时间：${fmtDate(t.target, ConfigManager.message.utcOffset)}
+ 内容：${content}`;
                 }
                 case 'interval': {
                     return `${i + 1}. 定时器设定时间：${fmtDate(t.set, ConfigManager.message.utcOffset)}
 类型:${t.type}
 间隔时间：${t.interval}秒
 剩余触发次数：${t.count === -1 ? '无限' : t.count - 1}
-内容：${t.content}`;
+ 内容：${content}`;
                 }
             }
         }).join('\n');

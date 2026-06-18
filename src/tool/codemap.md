@@ -26,7 +26,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_music.ts` | `music_play` | Music search & play |
 | `tool_web.ts` | `web_search`, `web_read` | Web search (Jina primary + SearXNG fallback) & scraping (Jina Reader) |
 | `tool_alias.ts` | `edit_alias` | User alias mapping (add/delete) |
-| `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers (datetime/seconds params added; old year/month/day/hour/minute deprecated) |
+| `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers (datetime/seconds params added; old year/month/day/hour/minute deprecated). _Jun 18: show_timer_list now resolves `__TASK_<id>__` content via TaskManager._ |
 | `tool_task.ts` | `create_task`, `list_tasks`, `update_task`, `delete_task` | Task management (shared TaskManager with AI tools) |
 | `tool_ban.ts` | `ban`, `whole_ban`, `get_ban_list` | QQ group mute |
 | `tool_rename.ts` | `rename` | Group nickname |
@@ -193,7 +193,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **`src/utils/utils_string.ts`** — `fixJsonString`, `parseSpecialTokens`, `fmtDate` | Imported by tool.ts + tool_message.ts, tool_render.ts plus tool_essence_msg.ts, tool_ban.ts, tool_time.ts | JSON repair for malformed LLM output; content parsing; timezone-aware timestamp formatting |
 | **`src/utils/utils.ts`** — `generateId`, `replyToSender`, `transformMsgId` | Imported by tool_image.ts, tool_message.ts, tool_essence_msg.ts, tool_render.ts | ID generation, message sending, ID format conversion |
 | **`src/utils/utils_message.ts`** — `buildContent`, `handleReply`, `getRoleSetting` | Imported by tool_context.ts, tool_memory.ts, tool_message.ts | Message building helpers |
-| **`src/timer.ts`** — `TimerManager` | Imported by `tool_time.ts` | Timer CRUD operations |
+| **`src/timer.ts`** — `TimerManager` | Imported by `tool_time.ts` | Timer CRUD operations; `show_timer_list` resolves `__TASK_<id>__` via lazy-required TaskManager |
 | **`src/logger.ts`** — logger | Imported by many tools | Structured logging (`.warning()` method used instead of deprecated `.warn()`) |
 | **SealDice Runtime** — `seal.ext`, `seal.deck`, `seal.vars`, `seal.replyToSender`, `seal.setPlayerGroupCard`, `seal.format`, `seal.base64ToImage` | Used via global scope | Native dice bot extension system, deck drawing, variable CRUD, message sending |
 | **OB11 / OneBot v11** — via `utils_ob11.ts` | Indirect via util functions | HTTP-based QQ bot protocol for group management, messaging, TTS, group sign-in |
