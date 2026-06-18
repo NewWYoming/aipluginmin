@@ -49,13 +49,7 @@ function main() {
       const uid = ctx.player.userId;
       const gid = ctx.group.groupId;
       const sid = ctx.isPrivate ? uid : gid;
-      let ai = AIManager.cache[sid];
-      if (!ai) {
-        if (!ctx.isPrivate && !globalStandby && !triggerConditionMap[sid]?.length) {
-          return;
-        }
-        ai = AIManager.getAI(sid);
-      }
+      const ai = AIManager.getAI(sid);
 
       // 检查活跃时间定时器
       await ai.checkActiveTimer(ctx);
