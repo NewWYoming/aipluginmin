@@ -64,6 +64,7 @@ export class AI {
     imagePool: ImagePool;
     setting: Setting;
     isChatting: boolean;
+    pendingReminders: { ctx: seal.MsgContext; msg: seal.Message }[] = [];
     _lastCleanupDate: string;
 
     // 下面是临时变量，用于处理消息
@@ -112,6 +113,19 @@ export class AI {
         // Image sending is now handled via ImagePool in image command
     }
 
+    enqueueReminder(ctx: seal.MsgContext, msg: seal.Message): void {
+        this.pendingReminders.push({ ctx, msg });
+        if (!this.isChatting) {
+            this.processNextReminder();
+        }
+    }
+
+    async processNextReminder(): Promise<void> {
+        if (this.pendingReminders.length === 0) return;
+        const { ctx, msg } = this.pendingReminders.shift()!;
+        await this.chat(ctx, msg, '任务提醒');
+    }
+
     async chat(ctx: seal.MsgContext, msg: seal.Message, reason: string = ''): Promise<void> {
         if (this.isChatting) {
             logger.info('跳过重复触发: 已有回复在进行中');
@@ -121,7 +135,7 @@ export class AI {
         logger.info('触发回复:', reason || '未知原因');
 
         try {
-        if (reason !== '函数回调触发') {
+        if (reason !== '函数回调触发' && reason !== '任务提醒') {
             const { bucketLimit, fillInterval } = ConfigManager.received;
             // 补充并检查触发次数
             if (Date.now() - this.bucket.lastTime > fillInterval * 1000) {
@@ -189,6 +203,7 @@ export class AI {
         logger.error('chat() 异常:', e?.message || e);
     } finally {
         this.isChatting = false;
+        this.processNextReminder();
     }
 }
 

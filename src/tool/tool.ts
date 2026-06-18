@@ -22,6 +22,7 @@ import { registerQQList } from "./tool_qq_list"
 import { registerSetTrigger } from "./tool_trigger"
 import { registerMusicPlay } from "./tool_music"
 import { registerRender } from "./tool_render"
+import { registerTaskTools } from "./tool_task"
 import { logger } from "../logger"
 import { Image } from "../AI/image";
 import { fixJsonString } from "../utils/utils_string";
@@ -207,6 +208,7 @@ export class ToolManager {
         registerSetTrigger();
         registerMusicPlay();
         registerRender();
+        registerTaskTools();
     }
 
     /**

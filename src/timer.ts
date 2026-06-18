@@ -216,6 +216,14 @@ export class TimerManager {
                                 continue;
                             }
 
+                            // 任务定时器识别：content 为 __TASK_<taskId>__ 格式
+                            if (timer.content && timer.content.startsWith('__TASK_')) {
+                                const taskId = timer.content.slice(7, -2);
+                                const { TaskManager } = require('./task');
+                                TaskManager.timerFires(taskId);
+                                continue;
+                            }
+
                             const { sid, isPrivate, epId, set, content } = timer;
                             const { ctx, msg } = getSessionCtxAndMsg(epId, sid, isPrivate);
                             const ai = AIManager.getAI(sid);

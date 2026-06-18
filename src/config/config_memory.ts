@@ -57,6 +57,10 @@ ID:上面是分割符
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大长度", 80, "印象文字最大字符数");
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·清理未活跃天数", 30, "超过此天数未发言的用户印象将被清理");
 
+        seal.ext.registerStringConfig(MemoryConfig.ext, '任务提醒润色提示',
+            '用亲切自然的语气提醒用户，可以适当加入鼓励的话语',
+            'AI 在发送任务提醒时的语气和风格方向。例如："用严厉的口吻" 或 "用可爱的语气，加颜文字"');
+
     }
 
     static get() {
@@ -73,6 +77,7 @@ ID:上面是分割符
             impressionMaxAge: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最长天数"),
             impressionMaxLength: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大长度"),
             cleanupInactiveDays: seal.ext.getIntConfig(MemoryConfig.ext, "印象·清理未活跃天数"),
+            taskReminderPolish: seal.ext.getStringConfig(MemoryConfig.ext, '任务提醒润色提示'),
         }
     }
 }

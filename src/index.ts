@@ -11,6 +11,7 @@ import { PrivilegeManager } from "./cmd/privilege";
 import { knowledgeMM } from "./AI/memory";
 import { CQTYPESALLOW } from "./config/config";
 import { registerCmd } from "./cmd/root";
+import { TaskManager } from "./task";
 
 let _disabledInPrivateCleaned = false;
 
@@ -25,6 +26,7 @@ function main() {
 
   registerCmd();
   PrivilegeManager.reviveCmdPriv();
+  TaskManager.initCron(ext);
 
   ext.onPoke = (ctx, event) => {
     const msg = createMsg(event.isPrivate ? 'private' : 'group', event.senderId, event.groupId);

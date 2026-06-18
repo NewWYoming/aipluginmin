@@ -54,6 +54,14 @@ export function registerTime() {
                         type: 'integer',
                         description: '分钟数'
                     },
+                    datetime: {
+                        type: 'string',
+                        description: '截止日期时间，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:MM。优先级高于 years/months/days/hours/minutes'
+                    },
+                    seconds: {
+                        type: 'integer',
+                        description: '相对秒数，如 3600=1小时后。优先级高于 years/months/days/hours/minutes'
+                    },
                     count: {
                         type: 'integer',
                         description: '触发次数，-1为无限次'
@@ -68,14 +76,23 @@ export function registerTime() {
         }
     });
     toolSet.solve = async (ctx, _, ai, args) => {
-        const { types, years = 0, months = 0, days = 0, hours = 0, minutes, count = 1, content } = args;
+        const { types, datetime, seconds, years = 0, months = 0, days = 0, hours = 0, minutes, count = 1, content } = args;
+        let y = parseInt(years), m = parseInt(months), d = parseInt(days), h = parseInt(hours), min = parseInt(minutes);
+        let c = parseInt(count);
 
-        const y = parseInt(years);
-        const m = parseInt(months);
-        const d = parseInt(days);
-        const h = parseInt(hours);
-        const min = parseInt(minutes);
-        const c = parseInt(count);
+        // datetime 优先级最高
+        if (datetime) {
+            const match = datetime.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?$/);
+            if (match) {
+                y = parseInt(match[1]); m = parseInt(match[2]); d = parseInt(match[3]);
+                h = match[4] ? parseInt(match[4]) : 0; min = match[5] ? parseInt(match[5]) : 0;
+            } else {
+                return { content: 'datetime 格式错误，应为 YYYY-MM-DD 或 YYYY-MM-DD HH:MM', images: [] };
+            }
+        } else if (seconds) {
+            y = 0; m = 0; d = 0; h = 0; min = Math.ceil(seconds / 60);
+        }
+
         if (isNaN(y)) return { content: '年数应为数字', images: [] };
         if (isNaN(m)) return { content: '月数应为数字', images: [] };
         if (isNaN(d)) return { content: '天数应为数字', images: [] };
@@ -123,7 +140,20 @@ export function registerTime() {
             }
         }
 
-        return { content: `设置定时器成功，请等待`, images: [] };
+        let confirmMsg: string;
+        switch (types) {
+            case 'target': {
+                const t = new Date(y, m - 1, d, h, min);
+                confirmMsg = `定时器已设置\n类型：目标时间\n触发时间：${fmtDate(Math.floor(t.getTime() / 1000), ConfigManager.message.utcOffset)}\n提示内容：${content}`;
+                break;
+            }
+            case 'interval': {
+                const mins2 = y * 365 * 24 * 60 + m * 30 * 24 * 60 + d * 24 * 60 + h * 60 + min;
+                confirmMsg = `定时器已设置\n类型：间隔循环\n间隔：${mins2 * 60}秒（约${Math.round(mins2 / 60)}小时）\n触发次数：${c === -1 ? '无限' : c}\n提示内容：${content}`;
+                break;
+            }
+        }
+        return { content: confirmMsg, images: [] };
     }
 
     const toolShow = new Tool({
