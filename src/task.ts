@@ -49,6 +49,8 @@ export class TaskManager {
     }
     this.tasks[task.assigneeId].push(task);
     this.save();
+    // 立刻尝试创建闹钟——避免等到下次 cron 扫描（如今天 6 点设的 8 点任务）
+    this.createAlarm(task);
   }
 
   static getTasks(assigneeId: string, groupId?: string): Task[] {
