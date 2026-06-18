@@ -100,6 +100,14 @@ export function registerCmdTool() {
                     return ret;
                 }
                 const tool = ToolManager.toolMap[val3];
+                if (ConfigManager.tool.toolsNotAllow.includes(val3)) {
+                    seal.replyToSender(ctx, msg, `调用函数失败:禁止调用的函数:${val3}`);
+                    return ret;
+                }
+                if (tool.type !== 'all' && tool.type !== msg.messageType) {
+                    seal.replyToSender(ctx, msg, `调用函数失败:函数${val3}可使用的场景类型为${tool.type}，当前场景类型为${msg.messageType}`);
+                    return ret;
+                }
                 if (tool.cmdInfo.ext !== '' && ToolManager.cmdArgs == null) {
                     seal.replyToSender(ctx, msg, `暂时无法调用函数，请先使用 .r 指令`);
                     return ret;

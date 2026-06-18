@@ -25,6 +25,7 @@ export function registerCmdRole() {
         const roleSettingIndex = roleSettingNames.indexOf(val2);
         if (roleSettingIndex < 0 || roleSettingIndex >= roleSettingTemplate.length) {
             seal.replyToSender(ctx, msg, `角色设定名称[${val2}]没有对应的角色设定`);
+            return ret;
         }
         seal.vars.strSet(ctx, "$gSYSPROMPT", val2);
         seal.replyToSender(ctx, msg, `角色设定已切换到[${val2}]`);

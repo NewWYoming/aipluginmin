@@ -90,6 +90,11 @@ export function registerCmdOn() {
                         return ret;
                     }
 
+                    if (segs < 1) {
+                        seal.replyToSender(ctx, msg, '活跃次数必须大于0');
+                        return ret;
+                    }
+
                     const endReal = end >= start ? end : end + 24 * 60;
                     if (segs > endReal - start) {
                         seal.replyToSender(ctx, msg, '活跃次数不能大于活跃时间段分钟数');

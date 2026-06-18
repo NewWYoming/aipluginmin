@@ -16,8 +16,6 @@ export function registerCmdForget() {
     cmd.solve = (scc: SubCmdContext) => {
         const { ctx, msg, cmdArgs, sid, ai, ret } = scc;
 
-        ai.resetState();
-
         const val2 = cmdArgs.getArgN(2);
         switch (aliasToCmd(val2)) {
             case 'assistant': {
@@ -33,6 +31,7 @@ export function registerCmdForget() {
                 return ret;
             }
             default: {
+                ai.resetState();
                 ai.context.clearMessages();
                 seal.replyToSender(ctx, msg, '上下文已清除');
                 AIManager.saveAI(sid);

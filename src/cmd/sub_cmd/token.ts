@@ -4,6 +4,66 @@ import { aliasToCmd } from "../../utils/utils";
 import { S, U } from "../privilege";
 import { SubCmd, SubCmdContext } from "../root";
 
+type UsageEntry = { prompt_tokens: number; completion_tokens: number };
+type AggResult = { [dateKey: string]: UsageEntry };
+
+function aggregateModelEntries(
+    modelEntries: { [dateKey: string]: UsageEntry },
+    period: 'year' | 'month'
+): AggResult {
+    const obj: AggResult = {};
+    const now = new Date();
+
+    for (const rawKey in modelEntries) {
+        const usage = modelEntries[rawKey];
+        const parts = rawKey.split('-').map(v => parseInt(v));
+
+        if (period === 'year') {
+            const [year, month] = parts;
+            const ym = year * 12 + month;
+            const currentYM = now.getFullYear() * 12 + (now.getMonth() + 1);
+            if (ym >= currentYM - 11 && ym <= currentYM) {
+                const dateKey = `${year}-${String(month).padStart(2, '0')}`;
+                if (!obj[dateKey]) obj[dateKey] = { prompt_tokens: 0, completion_tokens: 0 };
+                obj[dateKey].prompt_tokens += usage.prompt_tokens;
+                obj[dateKey].completion_tokens += usage.completion_tokens;
+            }
+        } else {
+            const [year, month, day] = parts;
+            const ymd = year * 12 * 31 + month * 31 + day;
+            const currentYMD = now.getFullYear() * 12 * 31 + (now.getMonth() + 1) * 31 + now.getDate();
+            if (ymd >= currentYMD - 30 && ymd <= currentYMD) {
+                const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                if (!obj[dateKey]) obj[dateKey] = { prompt_tokens: 0, completion_tokens: 0 };
+                obj[dateKey].prompt_tokens += usage.prompt_tokens;
+                obj[dateKey].completion_tokens += usage.completion_tokens;
+            }
+        }
+    }
+    return obj;
+}
+
+function mergeAggResults(target: AggResult, source: AggResult): AggResult {
+    for (const key in source) {
+        if (!target[key]) target[key] = { prompt_tokens: 0, completion_tokens: 0 };
+        target[key].prompt_tokens += source[key].prompt_tokens;
+        target[key].completion_tokens += source[key].completion_tokens;
+    }
+    return target;
+}
+
+function formatUsageReport(obj: AggResult, header: string): string {
+    const s = Object.keys(obj).sort().map(key => {
+        const usage = obj[key];
+        if (usage.prompt_tokens === 0 && usage.completion_tokens === 0) return '';
+        return `${key}:
+          输入token:${usage.prompt_tokens}
+          输出token:${usage.completion_tokens}
+          总token:${usage.prompt_tokens + usage.completion_tokens}`;
+    }).filter(Boolean).join('\n');
+    return s ? `${header}:\n${s}` : '';
+}
+
 export function registerCmdToken() {
     const cmd = new SubCmd('token');
     cmd.desc = 'token相关操作';
@@ -84,131 +144,33 @@ export function registerCmdToken() {
                 return ret;
             }
             case 'year': {
-                const obj: {
-                    [key: string]: {
-                        prompt_tokens: number;
-                        completion_tokens: number;
-                    }
-                } = {};
-                const now = new Date();
-                const currentYear = now.getFullYear();
-                const currentMonth = now.getMonth() + 1;
-                const currentYM = currentYear * 12 + currentMonth;
+                let obj: AggResult = {};
                 for (const model in AIManager.usageMap) {
-                    const modelUsage = AIManager.usageMap[model];
-                    for (const key in modelUsage) {
-                        const usage = modelUsage[key];
-                        const [year, month, _] = key.split('-').map(v => parseInt(v));
-                        const ym = year * 12 + month;
-
-                        if (ym >= currentYM - 11 && ym <= currentYM) {
-                            const key = `${year}-${month}`;
-                            if (!obj.hasOwnProperty(key)) {
-                                obj[key] = {
-                                    prompt_tokens: 0,
-                                    completion_tokens: 0
-                                };
-                            }
-
-                            obj[key].prompt_tokens += usage.prompt_tokens;
-                            obj[key].completion_tokens += usage.completion_tokens;
-                        }
-                    }
+                    obj = mergeAggResults(obj, aggregateModelEntries(AIManager.usageMap[model], 'year'));
                 }
-
                 const val3 = cmdArgs.getArgN(3);
                 if (val3 === 'chart') {
                     const url = await get_chart_url('year', obj);
                     seal.replyToSender(ctx, msg, url ? `[CQ:image,file=${url}]` : '图表生成失败');
                     return ret;
                 }
-
-                const keys = Object.keys(obj).sort((a, b) => {
-                    const [yearA, monthA] = a.split('-').map(v => parseInt(v));
-                    const [yearB, monthB] = b.split('-').map(v => parseInt(v));
-                    return (yearA * 12 + monthA) - (yearB * 12 + monthB);
-                });
-
-                const s = keys.map(key => {
-                    const usage = obj[key];
-                    if (usage.prompt_tokens === 0 && usage.completion_tokens === 0) {
-                        return ``;
-                    }
-
-                    return `${key}:
-         输入token:${usage.prompt_tokens}
-         输出token:${usage.completion_tokens}
-         总token:${usage.prompt_tokens + usage.completion_tokens}`;
-                }).join('\n');
-
-                if (!s) {
-                    seal.replyToSender(ctx, msg, `没有使用记录`);
-                    return ret;
-                }
-
-                seal.replyToSender(ctx, msg, `最近12个月使用记录如下:\n${s}`);
+                const report = formatUsageReport(obj, '最近12个月使用记录如下');
+                seal.replyToSender(ctx, msg, report || '没有使用记录');
                 return ret;
             }
             case 'month': {
-                const obj: {
-                    [key: string]: {
-                        prompt_tokens: number;
-                        completion_tokens: number;
-                    }
-                } = {};
-                const now = new Date();
-                const currentYear = now.getFullYear();
-                const currentMonth = now.getMonth() + 1;
-                const currentDay = now.getDate();
-                const currentYMD = currentYear * 12 * 31 + currentMonth * 31 + currentDay;
+                let obj: AggResult = {};
                 for (const model in AIManager.usageMap) {
-                    const modelUsage = AIManager.usageMap[model];
-                    for (const key in modelUsage) {
-                        const usage = modelUsage[key];
-                        const [year, month, day] = key.split('-').map(v => parseInt(v));
-                        const ymd = year * 12 * 31 + month * 31 + day;
-
-                        if (ymd >= currentYMD - 30 && ymd <= currentYMD) {
-                            const key = `${year}-${month}-${day}`;
-                            if (!obj.hasOwnProperty(key)) {
-                                obj[key] = {
-                                    prompt_tokens: 0,
-                                    completion_tokens: 0
-                                };
-                            }
-
-                            obj[key].prompt_tokens += usage.prompt_tokens;
-                            obj[key].completion_tokens += usage.completion_tokens;
-                        }
-                    }
+                    obj = mergeAggResults(obj, aggregateModelEntries(AIManager.usageMap[model], 'month'));
                 }
-
                 const val3 = cmdArgs.getArgN(3);
                 if (val3 === 'chart') {
                     const url = await get_chart_url('month', obj);
                     seal.replyToSender(ctx, msg, url ? `[CQ:image,file=${url}]` : '图表生成失败');
                     return ret;
                 }
-
-                const keys = Object.keys(obj).sort((a, b) => {
-                    const [yearA, monthA, dayA] = a.split('-').map(v => parseInt(v));
-                    const [yearB, monthB, dayB] = b.split('-').map(v => parseInt(v));
-                    return (yearA * 12 * 31 + monthA * 31 + dayA) - (yearB * 12 * 31 + monthB * 31 + dayB);
-                });
-
-                const s = keys.map(key => {
-                    const usage = obj[key];
-                    if (usage.prompt_tokens === 0 && usage.completion_tokens === 0) {
-                        return ``;
-                    }
-
-                    return `${key}:
-         输入token:${usage.prompt_tokens}
-         输出token:${usage.completion_tokens}
-         总token:${usage.prompt_tokens + usage.completion_tokens}`;
-                }).join('\n');
-
-                seal.replyToSender(ctx, msg, `最近31天使用记录如下:\n${s}`);
+                const report = formatUsageReport(obj, '最近31天使用记录如下');
+                seal.replyToSender(ctx, msg, report || '没有使用记录');
                 return ret;
             }
             case 'clear': {
@@ -252,131 +214,27 @@ export function registerCmdToken() {
                 const val3 = cmdArgs.getArgN(3);
                 switch (aliasToCmd(val3)) {
                     case 'year': {
-                        const obj: {
-                            [key: string]: {
-                                prompt_tokens: number;
-                                completion_tokens: number;
-                            }
-                        } = {};
-                        const now = new Date();
-                        const currentYear = now.getFullYear();
-                        const currentMonth = now.getMonth() + 1;
-                        const currentYM = currentYear * 12 + currentMonth;
-                        const model = val2;
-
-                        const modelUsage = AIManager.usageMap[model];
-                        for (const key in modelUsage) {
-                            const usage = modelUsage[key];
-                            const [year, month, _] = key.split('-').map(v => parseInt(v));
-                            const ym = year * 12 + month;
-
-                            if (ym >= currentYM - 11 && ym <= currentYM) {
-                                const key = `${year}-${month}`;
-                                if (!obj.hasOwnProperty(key)) {
-                                    obj[key] = {
-                                        prompt_tokens: 0,
-                                        completion_tokens: 0
-                                    };
-                                }
-
-                                obj[key].prompt_tokens += usage.prompt_tokens;
-                                obj[key].completion_tokens += usage.completion_tokens;
-                            }
-                        }
-
+                        const obj = aggregateModelEntries(AIManager.usageMap[val2], 'year');
                         const val4 = cmdArgs.getArgN(4);
                         if (val4 === 'chart') {
                             const url = await get_chart_url('year', obj);
                             seal.replyToSender(ctx, msg, url ? `[CQ:image,file=${url}]` : '图表生成失败');
                             return ret;
                         }
-
-                        const keys = Object.keys(obj).sort((a, b) => {
-                            const [yearA, monthA] = a.split('-').map(v => parseInt(v));
-                            const [yearB, monthB] = b.split('-').map(v => parseInt(v));
-                            return (yearA * 12 + monthA) - (yearB * 12 + monthB);
-                        });
-
-                        const s = keys.map(key => {
-                            const usage = obj[key];
-                            if (usage.prompt_tokens === 0 && usage.completion_tokens === 0) {
-                                return ``;
-                            }
-
-                            return `${key}:
-             输入token:${usage.prompt_tokens}
-             输出token:${usage.completion_tokens}
-             总token:${usage.prompt_tokens + usage.completion_tokens}`;
-                        }).join('\n');
-
-                        if (!s) {
-                            seal.replyToSender(ctx, msg, `没有使用记录`);
-                            return ret;
-                        }
-
-                        seal.replyToSender(ctx, msg, `最近12个月使用记录如下:\n${s}`);
+                        const report = formatUsageReport(obj, '最近12个月使用记录如下');
+                        seal.replyToSender(ctx, msg, report || '没有使用记录');
                         return ret;
                     }
                     case 'month': {
-                        const obj: {
-                            [key: string]: {
-                                prompt_tokens: number;
-                                completion_tokens: number;
-                            }
-                        } = {};
-                        const now = new Date();
-                        const currentYear = now.getFullYear();
-                        const currentMonth = now.getMonth() + 1;
-                        const currentDay = now.getDate();
-                        const currentYMD = currentYear * 12 * 31 + currentMonth * 31 + currentDay;
-                        const model = val2;
-
-                        const modelUsage = AIManager.usageMap[model];
-                        for (const key in modelUsage) {
-                            const usage = modelUsage[key];
-                            const [year, month, day] = key.split('-').map(v => parseInt(v));
-                            const ymd = year * 12 * 31 + month * 31 + day;
-
-                            if (ymd >= currentYMD - 30 && ymd <= currentYMD) {
-                                const key = `${year}-${month}-${day}`;
-                                if (!obj.hasOwnProperty(key)) {
-                                    obj[key] = {
-                                        prompt_tokens: 0,
-                                        completion_tokens: 0
-                                    };
-                                }
-
-                                obj[key].prompt_tokens += usage.prompt_tokens;
-                                obj[key].completion_tokens += usage.completion_tokens;
-                            }
-                        }
-
+                        const obj = aggregateModelEntries(AIManager.usageMap[val2], 'month');
                         const val4 = cmdArgs.getArgN(4);
                         if (val4 === 'chart') {
                             const url = await get_chart_url('month', obj);
                             seal.replyToSender(ctx, msg, url ? `[CQ:image,file=${url}]` : '图表生成失败');
                             return ret;
                         }
-
-                        const keys = Object.keys(obj).sort((a, b) => {
-                            const [yearA, monthA, dayA] = a.split('-').map(v => parseInt(v));
-                            const [yearB, monthB, dayB] = b.split('-').map(v => parseInt(v));
-                            return (yearA * 12 * 31 + monthA * 31 + dayA) - (yearB * 12 * 31 + monthB * 31 + dayB);
-                        });
-
-                        const s = keys.map(key => {
-                            const usage = obj[key];
-                            if (usage.prompt_tokens === 0 && usage.completion_tokens === 0) {
-                                return ``;
-                            }
-
-                            return `${key}:
-             输入token:${usage.prompt_tokens}
-             输出token:${usage.completion_tokens}
-             总token:${usage.prompt_tokens + usage.completion_tokens}`;
-                        }).join('\n');
-
-                        seal.replyToSender(ctx, msg, `最近31天使用记录如下:\n${s}`);
+                        const report = formatUsageReport(obj, '最近31天使用记录如下');
+                        seal.replyToSender(ctx, msg, report || '没有使用记录');
                         return ret;
                     }
                     default: {

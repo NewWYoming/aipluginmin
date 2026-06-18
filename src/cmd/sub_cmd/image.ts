@@ -71,7 +71,10 @@ export function registerCmdImage() {
                 }
                 const messageArray = transformTextToArray(val3);
                 const { images } = await transformArrayToContent(ctx, ai, messageArray);
-                if (images.length === 0) seal.replyToSender(ctx, msg, '请附带图片');
+                if (images.length === 0) {
+                    seal.replyToSender(ctx, msg, '请附带图片');
+                    return ret;
+                }
                 const img = images[0];
                 await img.imageToText(cmdArgs.getRestArgsFrom(4))
                 seal.replyToSender(ctx, msg, img.CQCode + `\n` + img.content);

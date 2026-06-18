@@ -55,6 +55,36 @@ For debugging, investigation, and non-trivial fixes, the preferred pattern is:
 
 Example of this flow in practice: vector dead code cleanup → Jina EOF debugging → timezone fix. Each followed: research (subagent) → write plan → oracle review → implement (fixer) → commit + codemap update.
 
+### Long-term fix tracking workflow
+
+When a code review or investigation surfaces **multiple bugs/issues** (5+), do not try to fix them all at once. Instead:
+
+1. **Create tracking document** — write to `docs/superpowers/plans/YYYY-MM-DD-<topic>-fixes-plan.md` with this structure:
+
+   - **Main task table**: task ID, name, affected file(s), severity (🔴/🟠/🟡/🔵), overall progress (⬜/🔄/✅)
+   - **Per-task sub-task tables**: sub-task ID, description, file:line, progress, notes
+   - Tasks grouped by severity: 🔴 Critical (security/crash/logic) > 🟠 Medium (data integrity) > 🟡 Low (code quality/tech debt) > 🔵 Info (architecture/cleanup)
+
+2. **Prioritize** — fix in severity order. Critical bugs first, code quality last.
+
+3. **Fix one task at a time** — per the preferred troubleshooting workflow. **Every fix plan MUST go through independent oracle review before implementation.** No exceptions, including trivial-looking one-liners:
+
+   a. **Research** — dispatch `@explorer` / `@librarian` as needed
+   b. **Write fix plan** — exact file paths, line numbers, code changes, and impact analysis
+   c. **Oracle review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. **Mandatory.** Update plan based on findings.
+   d. **Implement** — dispatch `@fixer` with the reviewed plan
+   e. **Verify** — `npm run build`
+   f. **Commit** — record commit hash in tracking document
+
+4. **Update tracking document** — after each commit, update the progress markers:
+   - `⬜` → `🔄` when work begins
+   - `🔄` → `✅` when commit lands
+   - Record the commit hash in the sub-task notes
+
+5. **Version bump** — every commit that modifies `src/` bumps the patch version.
+
+6. **Do not close** the tracking document until all 🔴 and 🟠 items are resolved. 🟡 and 🔵 items may be deferred to future iterations.
+
 ## SealDice API
 
 - **`types/seal.d.ts`** declares the SealDice runtime types (provided globally, no import needed). The file is **incomplete**.

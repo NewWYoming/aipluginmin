@@ -1,3 +1,4 @@
+import { AIManager } from "../../AI/AI";
 import { aliasToCmd } from "../../utils/utils";
 import { I, U } from "../privilege";
 import { SubCmd, SubCmdContext } from "../root";
@@ -19,8 +20,8 @@ export function registerCmdCtxn() {
             mod: { priv: I }
         }
     };
-    cmd.solve = (scc: SubCmdContext) => {
-        const { ctx, msg, cmdArgs, epId, gid, ai, ret } = scc;
+    cmd.solve = async (scc: SubCmdContext) => {
+        const { ctx, msg, cmdArgs, epId, gid, sid, ai, ret } = scc;
         const val2 = cmdArgs.getArgN(2);
         switch (aliasToCmd(val2)) {
             case 'status': {
@@ -37,9 +38,9 @@ export function registerCmdCtxn() {
                     return ret;
                 }
                 const promises = ai.context.userInfoList.map(ui => ai.context.setName(epId, gid, ui.id, mod));
-                Promise.all(promises).then(() => {
-                    seal.replyToSender(ctx, msg, `设置完成，上下文里的名字有：\n${ai.context.userInfoList.map(uni => `${uni.name}(${uni.id})`).join('\n')}`);
-                });
+                await Promise.all(promises);
+                AIManager.saveAI(sid);
+                seal.replyToSender(ctx, msg, `设置完成，上下文里的名字有：\n${ai.context.userInfoList.map(uni => `${uni.name}(${uni.id})`).join('\n')}`);
                 return ret;
             }
             case 'mod': {
@@ -54,6 +55,7 @@ export function registerCmdCtxn() {
                     return ret;
                 }
                 ai.context.autoNameMod = mod;
+                AIManager.saveAI(sid);
                 seal.replyToSender(ctx, msg, `设置成功，将自动修改上下文里的名字为${mod === 1 ? '昵称' : '群名片'}`);
                 return ret;
             }
