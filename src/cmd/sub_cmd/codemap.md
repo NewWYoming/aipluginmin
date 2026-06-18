@@ -26,7 +26,8 @@ The subcommand system acts as a CLI router: the parent `cmd/root.ts` `registerCm
 | **memory** | `memory.ts` | U (root) | Manage long-term (`private`/`group`) and short-term memory. CRUD operations: set/delete/list/clear. Also supports persona settings and `sum` (force summarization into short-term memory). |
 | **image** | `image.ts` | U (root) | Image pool operations: list stolen/local images, clear stolen pool, image-to-text (`itt`), find image by ID. |
 | **ctxn** | `ctxn.ts` | U (root) | Context name management: view names, set to nickname/card, enable auto-name-modification (0/1/2). Persists AI state via `AIManager.saveAI()` on `set` and `mod`. Solve is async. |
-| **tool** | `tool.ts` | U (root) | Tool function management: list all tools with on/off status, toggle individual tools, view tool help/params, manually call a tool function via `call` (with `toolsNotAllow` deny-list + `tool.type` safety checks). |
+| **tool** | `tool.ts` | U→I→M | Tool function management: list all tools with on/off status, toggle individual tools, view tool help/params, manually call a tool function via `call` (with `toolsNotAllow` deny-list + `tool.type` safety checks). |
+| **task** | `task.ts` | U | Task management: add/list/update/delete tasks. Remind requires inviter. |
 | **token** | `token.ts` | S (root) | Token usage tracking: list models, view per-model/per-period usage, year/month charts (image generation), clear usage records. |
 | **timer** | `timer.ts` | U (root) | Timer management: list active timers, clear all timers for the current session. |
 | **privilege** | `privilege.ts` | M (root) | Permission management: set/check session permissions, set/show/reset command-level permissions. |
@@ -68,3 +69,7 @@ The `handleMemoryScope()` function with a `MemoryScopeConfig` interface replaces
 ### status.ts — Indentation fix
 
 Converted multi-line reply template literal to `\n` concatenation for consistent formatting.
+
+### privilege.ts — `checkCmdPriv` sub-subcommand fix
+
+Fixed `checkCmdPriv` bug: when a subcommand's args only defines SOME sub-subcommands (like `task.args = {remind: ...}`), the function no longer recurses into args for undefined sub-subcommands. Added `checkNext()` helper to handle this edge case correctly.
