@@ -26,7 +26,8 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_music.ts` | `music_play` | Music search & play |
 | `tool_web.ts` | `web_search`, `web_read` | Web search (Jina primary + SearXNG fallback) & scraping (Jina Reader) |
 | `tool_alias.ts` | `edit_alias` | User alias mapping (add/delete) |
-| `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers |
+| `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers (datetime/seconds params added; old year/month/day/hour/minute deprecated) |
+| `tool_task.ts` | `create_task`, `list_tasks`, `update_task`, `delete_task` | Task management (shared TaskManager with AI tools) |
 | `tool_ban.ts` | `ban`, `whole_ban`, `get_ban_list` | QQ group mute |
 | `tool_rename.ts` | `rename` | Group nickname |
 | `tool_group_sign.ts` | `group_sign` | Group check-in |
@@ -37,7 +38,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_context.ts` | `get_context` | Conversation context inspection |
 | `tool_trigger.ts` | `set_trigger_condition` | Proactive trigger conditions |
 
-Total: **~42 tools** across **22 files** (20 active tool files + tool.ts + sample.ts). `tool_record.ts` removed, `tool_image.ts` deprecated (file kept, registration commented out).
+Total: **~46 tools** across **23 files** (21 active tool files + tool.ts + sample.ts). `tool_record.ts` removed, `tool_image.ts` deprecated (file kept, registration commented out).
 
 ---
 
@@ -60,6 +61,7 @@ ToolManager.registerTool()
   ├─ registerBan()       → tool_ban.ts
   ├─ registerTTS()       → tool_voice.ts
   ├─ registerTime()      → tool_time.ts
+  ├─ registerTask()      → tool_task.ts
   ├─ registerWeb()       → tool_web.ts
   ├─ registerGroupSign() → tool_group_sign.ts
   ├─ registerGetPersonInfo() → tool_person_info.ts
@@ -203,7 +205,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 
 | Category | Tools | Dependency |
 |---|---|---|---|
-| **Standalone** (no ext/network) | `get_time`, `list_decks`/`draw_deck`, `search_memory`, `add_memory`, `del_memory`, `clear_memory`, `get_context`, `edit_alias` | AI instance only |
+| **Standalone** (no ext/network) | `get_time`, `list_decks`/`draw_deck`, `search_memory`, `add_memory`, `del_memory`, `clear_memory`, `get_context`, `edit_alias`, `create_task`, `list_tasks`, `update_task`, `delete_task` | AI instance only |
 | **Extension-delegated** (via `extensionSolve`) | `attr_show`, `attr_get`, `attr_set`, `jrrp`, `roll_check`, `san_check`, `modu_roll`, `modu_search` | SealDice extension commands |
 | **OB11 network** (group admin) | `ban`, `whole_ban`, `get_ban_list`, `rename`, `group_sign`, `get_person_info`, `get_list`, `get_group_member_list`, `search_chat`, `search_common_group`, `get_msg`, `delete_msg`, `send_forward_msg`, `set_essence_msg`, `get_essence_msg_list`, `delete_essence_msg` | `utils_ob11.ts` |
 | **External HTTP** | `web_search`, `web_read`, `music_play`, `render_markdown`, `render_html`, `text_to_sound` (API mode) | Backend services (Jina API / SearXNG / render / music API / DashScope TTS) |

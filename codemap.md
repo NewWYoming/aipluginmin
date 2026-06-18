@@ -20,8 +20,9 @@
 | `src/config/` | SealDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
 | `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
 | `src/service/providers/` | Provider pattern for LLM backends: DeepSeek V4 (thinking mode), OpenAI-compatible generic | [📄](src/service/providers/codemap.md) |
-| `src/tool/` | AI function-calling tools: ~42 tools across COC/TRPG, memory, alias, image, messaging, utility domains | [📄](src/tool/codemap.md) |
-| `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management | [📄](src/cmd/codemap.md) |
+| `src/task.ts` | Task system: TaskManager with CRUD (add/get/update/delete), cron scheduling (daily 0:00 scan), TimerManager alarm integration for deadline/periodic reminders | |
+| `src/tool/` | AI function-calling tools: ~44 tools across COC/TRPG, memory, alias, image, messaging, utility, task domains | [📄](src/tool/codemap.md) |
+| `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management, `.ai task` subcommands (add/list/update/delete) | [📄](src/cmd/codemap.md) |
 | `src/cmd/sub_cmd/` | Individual subcommand implementations (17 commands) | [📄](src/cmd/sub_cmd/codemap.md) |
 | `src/utils/` | Shared utilities: string parsing, message formatting, OB11 bridge, SealDice helpers | [📄](src/utils/codemap.md) |
 
@@ -47,6 +48,13 @@ Config system:
 Session model:
   AIManager.getAI(sid) → per-session AI instance (private=uid, group=gid)
   Each AI has: context, memory (POV-scoped with impressions + composite scoring), imageManager, imagePool, toolManager, setting
+
+Task system:
+  TaskManager (singleton) → CRUD via AI tools (create_task, list_tasks, update_task, delete_task) + .ai task subcommands
+  → initCron(ext) at startup → registerTask("0 0 * * *") daily cron → dailyScan()
+  → dailyScan: cleanupExpired() + getDueDeadlineTasks() + getNextPeriodicTasks() → createAlarm() per due task
+  → createAlarm: parse deadline/period → addTargetTimer() on TimerManager (24h window)
+  → timerFires(taskId): resolve session → addSystemUserMessage + enqueueReminder → AI responds with natural reminder
 ```
 
 ## Key Design Patterns

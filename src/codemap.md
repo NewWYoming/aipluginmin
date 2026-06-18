@@ -8,7 +8,8 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 
 | File | Role |
 |------|------|
-| `index.ts` | **Plugin entry.** `main()` registers configs, tools, commands (`registerTTS()` for TTS), timers (`TimerManager.init()`), and memory. Wires three SealDice hooks with AI lifecycle management: `disabledInPrivate` guard + `checkActiveTimer()` poll in all hooks, `evictPrivateInstances()` on disable. |
+| `index.ts` | **Plugin entry.** `main()` registers configs, tools, commands (`registerTTS()` for TTS), timers (`TimerManager.init()`, `TaskManager.initCron(ext)` for task daily cron), and memory. Wires three SealDice hooks with AI lifecycle management: `disabledInPrivate` guard + `checkActiveTimer()` poll in all hooks, `evictPrivateInstances()` on disable. |
+| `task.ts` | Task system: `Task` interface (deadline/periodic types with progress, reminders, scope) + `TaskManager` singleton (CRUD, daily scan, alarm creation via TimerManager, timer fire handler). |
 | `update.ts` | Changelog data (`updateInfo` map), consumed by the `.ai update` command. Not wired in `main()` — imported by commands. |
 
 ### Subdirectories (each has its own codemap.md)
@@ -17,11 +18,12 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 |-----------|------|
 | `config/` | All plugin configuration keys registered via `seal.ext.register*Config`. Central coordinator is `ConfigManager`. Nine config groups: message, request, reply, received, tool, log, backend, image, memory. |
 | `AI/` | Core AI session logic: `AI` class (per-session state + chat dispatch), `Context` (message history, observation collection for impressions), `MemoryManager` (POV-scoped memory, impression layer, composite scoring + LLM rerank), `ImageManager` / `ImagePool` (image handling). |
-| `cmd/` | Chat command system: `root.ts` defines the `SubCmd` base class and `registerCmd()` which creates the `.ai` command and its ~20 subcommands (`standby`, `forget`, `prompt`, `timer`, `image`, `memory`, etc.). |
-| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. ~42 tools across 21 files (`tool_roll_check`, `tool_web`, `tool_alias`, `tool_memory`, etc.). |
+| `cmd/` | Chat command system: `root.ts` defines the `SubCmd` base class and `registerCmd()` which creates the `.ai` command and its ~20 subcommands (`standby`, `forget`, `prompt`, `timer`, `image`, `memory`, `task`, etc.). |
+| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. ~44 tools across 22 files (`tool_roll_check`, `tool_web`, `tool_alias`, `tool_memory`, `tool_task`, etc.). |
 | `service/` | AI provider abstraction: `AIClient` (HTTP transport), `ToolCallLoop` (execution orchestrator), `providers/` (backend-specific adapters like OpenAI, Claude, etc.). |
 | `utils/` | Shared utilities: string handling, SealDice context scaffolding (`utils_seal`), message processing (`utils_message`), OB11 API (`utils_ob11`), update checker (`utils_update`). |
 | `logger.ts` | Singleton `Logger` instance. Logs with configurable verbosity (off / brief / detailed). Respects `logLevel` from config. |
+| `task.ts` | Task system: `Task` interface + `TaskManager` singleton with CRUD, daily cron scan, TimerManager alarm integration, and reminder injection via AI.enqueueReminder. |
 
 ## Design Patterns
 
@@ -108,9 +110,9 @@ TimerManager.init()
 
 | Integration | Mechanism | Files |
 |-------------|-----------|-------|
-| **SealDice runtime** | `seal.ext.new()`, `ext.onNotCommandReceived`, `ext.onCommandReceived`, `ext.onMessageSend`, `ext.onPoke`, `ext.registerStringConfig()`, etc. | `index.ts`, `config/*`, `cmd/*` |
+| **SealDice runtime** | `seal.ext.new()`, `ext.onNotCommandReceived`, `ext.onCommandReceived`, `ext.onMessageSend`, `ext.onPoke`, `ext.registerStringConfig()`, `ext.registerTask()`, etc. | `index.ts`, `config/*`, `cmd/*`, `task.ts` |
 | **AI backends** | HTTP requests via `AIClient` → provider-specific formatting in `service/providers/` | `service/AIClient.ts`, `service/providers/` |
-| **SealDice storage** | `ext.storageSet()` / `ext.storageGet()` for timer queue persistence | `timer.ts` |
+| **SealDice storage** | `ext.storageSet()` / `ext.storageGet()` for timer queue + task list persistence | `timer.ts`, `task.ts` |
 | **SealDice API** | `seal.format()`, `seal.replyToSender()`, `ctx.group`, `ctx.player`, `ctx.endPoint` | Throughout `utils/`, `cmd/`, `AI/` |
 | **OneBot (OB11)** | `utils_ob11.ts` for HTTP-based QQ API calls (send messages, get group info, etc.) | `utils/utils_ob11.ts` |
 | **Build system** | esbuild bundles all of `src/` into a single JS file; `csharp` and `puerts` marked external | `tools/build.js` (root), `tsconfig.json` |

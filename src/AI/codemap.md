@@ -6,7 +6,7 @@
 
 This directory is the **brain of the plugin**. It manages per-session AI instances that drive the bot's conversational behavior. Responsibilities include:
 
-- **`AI.ts`** — Session-scoped AI orchestrator. Owns all sub-components (context, tools, memory, images, settings). Exposes `chat()` as the master entry point for generating a reply, guarded by `isChatting` to prevent re-entrant calls (lazy-load guard). `resetState()` clears context timer, decrements bucket, and resets tool call count before each chat. Persists session via `AIManager.saveAI()` both before and after tool-call loops (persist-on-receive pattern). Tracks `_lastCleanupDate` for daily impression/maintenance tasks. The static `AIManager` handles serialization/deserialization of AI instances to/from SealDice storage, plus token usage tracking, and provides `evictAI(id)` / `evictPrivateInstances()` for cache lifecycle management.
+- **`AI.ts`** — Session-scoped AI orchestrator. Owns all sub-components (context, tools, memory, images, settings). Exposes `chat()` as the master entry point for generating a reply, guarded by `isChatting` to prevent re-entrant calls (lazy-load guard). `resetState()` clears context timer, decrements bucket, and resets tool call count before each chat. Persists session via `AIManager.saveAI()` both before and after tool-call loops (persist-on-receive pattern). Tracks `_lastCleanupDate` for daily impression/maintenance tasks. Manages a **task reminder queue** (`pendingReminders: { ctx, msg }[]`): `enqueueReminder(ctx, msg)` appends a reminder and triggers processing; `processNextReminder()` dequeues and calls `chat('任务提醒')` (exempt from bucket limits). The `chat()` finally block calls `processNextReminder()` after setting `isChatting = false`, ensuring queued reminders fire only after the current conversation finishes. The static `AIManager` handles serialization/deserialization of AI instances to/from SealDice storage, plus token usage tracking, and provides `evictAI(id)` / `evictPrivateInstances()` for cache lifecycle management.
 - **`context.ts`** — Conversation history management. Maintains the ordered message array (user + assistant + tool messages), enforces round limits, supports context-clearing flags (via `$gCLRMSGS` with role-filter variants: `clearMessages()`, `clearMessages('assistant', 'tool')`, `clearMessages('user')`), and provides cross-session user/group/image lookups. Manages `ignoreList` (UID-based blocking), `autoNameMod` (automatic name update to nickname/card), and `aliases` (UID-to-name registry capped at 10 names per UID with `cleanupStaleAliases()`). Collects **Tier 1 observations** (raw user messages) for the impression system during `addMessage()` — observations hard-capped at `maxObservedMessages * 3` entries.
 - **`memory.ts`** — Long-term memory with a **multi-tier memory system**. `Memory` is a single indexed record with text, keywords, user/group associations, weight, decay, **scope** (private/group/universal), **witnesses**, and **importance** level. `MemoryManager` manages the full collection — adding, **POV-filtered search**, **composite scoring** (Jaccard + recency + importance), **LLM re-ranking**, **impression generation/cleanup** (Tier 2), **user observations** (Tier 1), and **memory limit eviction** (via `limitMemory()` using `decay * weight` score ordering). `updateRelatedMemoryWeight()` propagates weight updates across bot, knowledge base, session, and group users. `getRelevantMemories()` supports pre-filtered lists with static `scoreCandidates()` for direct composite scoring. `KnowledgeMemoryManager` extends this for admin-defined knowledge bases. The old short-term memory system (`useShortMemory`/`shortMemoryList`/`updateShortMemory`) and embedding-based scoring (`vector`/`cosineSimilarity`) have been removed.
 - **`image.ts`** — Image representation (`Image` class with URL/base64/local type detection, OCR via LLM vision (`imageToText()` with JSON prompt parsing for `text1`/`text2`/`isEmoji`), URL validation/conversion) and `ImageManager` for handling image segments arriving in chat messages (OCR, auto-steal emoji into pool), plus `extractExistingImagesToSave()` for capturing in-text image references into memory.
@@ -31,6 +31,7 @@ This directory is the **brain of the plugin**. It manages per-session AI instanc
 | **LLM Re-ranking** | `MemoryManager.llmRerank()` | For >5 candidates, calls an LLM to score each memory's relevance (0-5) against the current query. Combines LLM score (70%) with composite base score (30%) to produce a final ranking. Falls back to base score on error. |
 | **POV Filtering** | `MemoryManager.getPOVFilteredMemories()` | Filters memories by scope + session ID. Only returns memories that match the current context (universal memories always included; `private` only matches same session; `group` only matches same group session). Used in `buildMemoryPrompt()` to prevent cross-session memory leakage. |
 | **Two-Tier Impression System** | `context.ts` + `memory.ts` | **Tier 1** (`context.addMessage`): silently collects raw user messages into `observations[uid]`. When `maxObservedMessages` threshold reached, triggers **Tier 2** (`MemoryManager.updateImpression`): LLM generates/updates a short (≤80 char) impression per user describing their personality/speech style. `cleanupImpressions()` removes stale entries for left/silent users on daily schedule. |
+| **Reminder Queue** | `AI.ts` | `pendingReminders: { ctx, msg }[]` — reminders are enqueued via `enqueueReminder()` and processed one-at-a-time by `processNextReminder()` after the current `chat()` finishes (called from the `finally` block). The reminder invocation (`chat('任务提醒')`) bypasses the token bucket via an explicit exemption. This ensures task reminders never interrupt active conversations. |
 
 ---
 
@@ -44,7 +45,7 @@ User message arrives
        ▼
 AI.chat(reason)
   ├─ isChatting guard → if already chatting, skip silently (lazy-load guard)
-  ├─ Token bucket check (skip if tool-callback)
+  ├─ Token bucket check (skip if tool-callback OR reason === '任务提醒')
   ├─ AI.resetState() → clear context timer, decrement bucket, reset tool call count
   ├─ Build AIClient from ConfigManager.request settings
   ├─ handleMessages(ctx, ai) → assemble OpenAI-format message array from:
@@ -61,7 +62,11 @@ AI.chat(reason)
   ├─ handleReply() → parse response into reply segments (text + images + context)
   ├─ AI.reply() → for each segment: replyToSender() + context.addMessage() (role=assistant)
   │
-  └─ AIManager.saveAI(id) → persist session to SealDice storage
+  ├─ AIManager.saveAI(id) → persist session to SealDice storage
+  │
+  └─ [finally block] isChatting = false
+       └─ processNextReminder() → if queue non-empty, dequeue next
+            └─ chat('任务提醒') → recurses (exempt from bucket check)
 ```
 
 ### Message Reception Flow (via `AI.handleReceipt()`)
