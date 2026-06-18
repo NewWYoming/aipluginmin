@@ -143,8 +143,12 @@ static updateTask(id: string, updates: Partial<Task>): boolean {
     if (idx !== -1) {
       const oldTask = this.tasks[uid][idx];
       this.tasks[uid][idx] = { ...oldTask, ...updates };
-      if (updates.progress === 100) {
+      if (updates.progress === 100 || updates.completed) {
         this.tasks[uid][idx].completed = true;
+        this.tasks[uid][idx].progress = 100;
+        // 标记完成时移除关联的定时器，避免空触发
+        TimerManager.removeTimers('', `__TASK_${id}__`, ['target']);
+        this.tasks[uid][idx].assignedTimerId = undefined;
       }
       // 截止时间变更 → 清除旧闹钟标记，等下次 cron 重新设
       if (updates.deadline && updates.deadline !== oldTask.deadline) {
@@ -213,11 +217,11 @@ static cleanupExpired(): void {
   const threeDaysAgo = now - 3 * 24 * 60 * 60;
   for (const uid in this.tasks) {
     this.tasks[uid] = this.tasks[uid].filter(t => {
-      // 已完成任务：检查完成时间是否超过 3 天（用 createdAt 近似）
-      // 周期任务无 deadline 字段，标记完成后也清理
-      if (t.completed) {
-        return (now - t.createdAt) < 3 * 24 * 60 * 60;
-      }
+  // 已完成任务：保留 3 天后清理
+  if (t.completed) {
+    // 近似：用 createdAt 替代 completedAt。若需精确，可加 completedAt 字段
+    return (now - t.createdAt) < 3 * 24 * 60 * 60;
+  }
       // 倒计时任务：截止日期是否已过 3 天
       if (t.type === 'deadline' && t.deadline) {
         const ts = parseDeadline(t.deadline);
@@ -265,7 +269,7 @@ function parsePeriodNext(period: string, now: number): number | null {
 - [ ] **Step 5: 实现 resolveSession + createAlarm + timerFires**
 
 ```typescript
-static resolveSession(task: Task): { ctx: seal.MsgContext; msg: seal.Message; ai: any } | null {
+static resolveSession(task: Task): { ctx: seal.MsgContext; msg: seal.Message; ai: ReturnType<typeof AIManager.getAI> } | null {
   const eps = seal.getEndPoints();
   if (!eps || eps.length === 0) {
     logger.error('[TaskManager] 无法获取 EndPoint');
@@ -419,7 +423,7 @@ seal.ext.registerStringConfig(MemoryConfig.ext, '任务提醒润色提示',
 在 `MemoryConfig.get()` 返回对象中添加：
 
 ```typescript
-taskReminderPolish: seal.ext.getStringConfig(MemoryConfig.ext, '任务提醒润色提示'),
+taskReminderPolish: seal.ext.getStringConfig(MemoryConfig.ext, '任务提醒润色提示') || '用亲切自然的语气提醒用户',
 ```
 
 任务代码中通过 `ConfigManager.memory.taskReminderPolish` 访问。
@@ -927,13 +931,13 @@ git commit -m "feat: task reminder system complete — v5.1.11"
 | 检查项 | 状态 |
 |--------|:--:|
 | 覆盖所有设计需求 | ✅ Task 模型、Cron、AI 工具、用户指令、润色配置、排队机制 |
-| config 键名正确 | ✅ `ConfigManager.memory.taskReminderPolish` (camelCase) |
-| 防重复定时器 | ✅ `createAlarm` 检查 `TimerManager.getTimers` + `assignedTimerId` |
-| 周期任务清理 | ✅ `cleanupExpired` 同时清理 deadline 过期和 completed 旧任务 |
+| config 键名正确 | ✅ `ConfigManager.memory.taskReminderPolish`；注意验证 `seal.ext.getStringConfig` API，如不存在改用 `getTemplateConfig(...)[0]` |
+| 防重复定时器 | ✅ `createAlarm` 检查 `TimerManager.getTimers`；`assignedTimerId` 为辅助标记 |
+| 完成任务清理定时器 | ✅ `updateTask` completed=true 时调用 `removeTimers` |
+| 周期任务清理 | ✅ `cleanupExpired` 同时清理 deadline 过期和 completed 旧任务（createdAt 近似，可后续加 completedAt） |
 | 截止更新重调度 | ✅ `updateTask` 检测 deadline 变更 → 清除旧闹钟 |
 | 短 ID 去重 | ✅ `TaskManager.resolveTaskId()` 统一解析 |
 | timer.ts 集成 | ✅ `content.startsWith('__TASK_')` → `slice(7, -2)` + `require('./task')` |
+| 类型安全 | ✅ `resolveSession` 返回 `ReturnType&lt;typeof AIManager.getAI&gt;` 替代 `any` |
 | 无占位符 | ✅ 每步有具体代码 |
-| 类型一致性 | ✅ Task 接口在 Task 1 定义，Task 5/6 引用一致 |
-| 循环依赖处理 | ✅ timer.ts 用 `require()` 延迟导入 |
 | 现有 set_timer 兼容 | ✅ 新参数可选，旧参数保留 |
