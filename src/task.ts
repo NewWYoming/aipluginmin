@@ -21,6 +21,7 @@ export interface Task {
   assigneeId: string;
   groupId: string;
   createdAt: number;
+  completedAt?: number; // 完成时间戳，用于清理逻辑
   assignedTimerId?: string;
 }
 
@@ -82,6 +83,7 @@ export class TaskManager {
         if (updates.progress === 100 || updates.completed) {
           this.tasks[uid][idx].completed = true;
           this.tasks[uid][idx].progress = 100;
+          this.tasks[uid][idx].completedAt = Math.floor(Date.now() / 1000);
           TimerManager.removeTimers('', `__TASK_${id}__`, ['target']);
           this.tasks[uid][idx].assignedTimerId = undefined;
         }
@@ -147,7 +149,8 @@ export class TaskManager {
     for (const uid in this.tasks) {
       this.tasks[uid] = this.tasks[uid].filter(t => {
         if (t.completed) {
-          return (now - t.createdAt) < 3 * 24 * 60 * 60;
+          const completedTs = t.completedAt || t.createdAt; // fallback for old tasks
+          return (now - completedTs) < 3 * 24 * 60 * 60;
         }
         if (t.type === 'deadline' && t.deadline) {
           const ts = parseDeadline(t.deadline);
@@ -195,7 +198,7 @@ export class TaskManager {
     logger.info(`[TaskManager] 闹钟已创建: ${task.name} → ${fmtDate(targetTs, ConfigManager.message.utcOffset)}`);
   }
 
-  static timerFires(taskId: string): void {
+  static async timerFires(taskId: string): Promise<void> {
     const task = this.getTaskById(taskId);
     if (!task || task.completed) return;
 
@@ -203,8 +206,8 @@ export class TaskManager {
     if (!session) return;
     const { ctx, msg, ai } = session;
 
-    const remainingDays = task.deadline
-      ? Math.ceil((parseDeadline(task.deadline)! - Date.now() / 1000) / 86400) : 0;
+    const deadlineTs = task.deadline ? parseDeadline(task.deadline) : null;
+    const remainingDays = deadlineTs ? Math.ceil((deadlineTs - Date.now() / 1000) / 86400) : 0;
     let template = `⏳ ${task.name} (进度: ${task.progress}%, 截止: ${task.deadline || '无'})`;
     if (remainingDays > 0) template += `\n剩余时间：${remainingDays}天`;
     if (task.scope === 'group' && task.assigneeId !== 'public') {
@@ -214,7 +217,7 @@ export class TaskManager {
     const polishHint = ConfigManager.memory.taskReminderPolish || '用亲切自然的语气提醒用户';
     const systemMsg = `你是任务提醒助手。${polishHint}\n\n以下是一条任务提醒，请用自然语气转述：\n${template}`;
 
-    ai.context.addSystemUserMessage('任务提醒', systemMsg, []);
+    await ai.context.addSystemUserMessage('任务提醒', systemMsg, []);
     ai.enqueueReminder(ctx, msg);
 
     task.assignedTimerId = undefined;

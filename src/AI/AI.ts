@@ -203,7 +203,7 @@ export class AI {
         logger.error('chat() 异常:', e?.message || e);
     } finally {
         this.isChatting = false;
-        this.processNextReminder();
+        this.processNextReminder().catch(e => logger.error('处理排队提醒失败:', e));
     }
 }
 
