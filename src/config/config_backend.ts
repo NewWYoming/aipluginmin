@@ -22,6 +22,8 @@ export class BackendConfig {
             "DashScope API Key（sk-开头）");
         seal.ext.registerStringConfig(BackendConfig.ext, "TTS 音色", "longanyang",
             "发音人。DashScope 推荐: longanyang, longchen, Cherry");
+        seal.ext.registerStringConfig(BackendConfig.ext, "TTS 模型", "qwen3-tts-flash",
+            "模型名。Qwen-TTS: qwen3-tts-flash / qwen-tts；CosyVoice: cosyvoice-v3-flash");
         seal.ext.registerTemplateConfig(BackendConfig.ext, "TTS 额外参数", [''],
             "JSON 参数，合并到请求的 input 字段。例如: {\"rate\": 1.2}");
     }
@@ -38,6 +40,7 @@ export class BackendConfig {
             ttsProvider: seal.ext.getOptionConfig(BackendConfig.ext, "TTS 服务商"),
             ttsApiKey: seal.ext.getStringConfig(BackendConfig.ext, "TTS API Key"),
             ttsVoice: seal.ext.getStringConfig(BackendConfig.ext, "TTS 音色"),
+            ttsModel: seal.ext.getStringConfig(BackendConfig.ext, "TTS 模型"),
             ttsExtraBody: seal.ext.getTemplateConfig(BackendConfig.ext, "TTS 额外参数") || '',
         }
     }
