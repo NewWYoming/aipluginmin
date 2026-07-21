@@ -47,7 +47,7 @@ ToolCallLoop.run(ctx, msg, ai, messages, tools)
 
 **Key details:**
 - AIClient keeps a `lastLogLen` counter to log only delta messages on subsequent requests (avoids flooding logs with the full context on every tool-call iteration).
-- ToolCallLoop enforces `ConfigManager.tool.maxCallCount` as both a per-turn tool limit and a total loop cap.
+- ToolCallLoop enforces `ConfigManager.tool.maxCallCount` as both a per-turn tool limit and a total loop cap; on cap, in-flight tools still execute and a final `tool_choice='none'` request returns clean text instead of raw AI content (which may contain tool-call JSON).
 - When `this.signal.aborted` is set (via `AbortSignal`), the loop short-circuits and returns empty content.
 
 ## 4. Integration Points

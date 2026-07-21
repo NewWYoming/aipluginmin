@@ -68,9 +68,6 @@ export class ToolCallLoop {
       // 上限保护
       if (this.callCount >= this.maxCallCount) {
         logger.warning('连续调用函数次数达到上限');
-        if (response.content) {
-          return { content: response.content, images: [], tool_calls_occurred };
-        }
       }
 
       // 将 assistant message（含 reasoning_content + tool_calls）追加到 context 和 API messages
