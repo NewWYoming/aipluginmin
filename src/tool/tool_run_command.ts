@@ -199,8 +199,12 @@ export function registerRunCommand() {
         try {
             const [result, success] = await ToolManager.extensionSolve(ctx, msg, ai, cmdInfo, cmdArgs, [], []);
             logger.info(`[run_command] 结果: success=${success} result=${result?.slice(0, 100) || '(空)'}`);
+            if (result) {
+                return { content: result, images: [] };
+            }
+            // 超时或无输出：extensionSolve 10s 内未捕获到指令回复
             return {
-                content: result || '指令无输出',
+                content: `指令 '${command}' 执行超时（10秒内未收到回复）。可能原因：该指令不支持 help 参数、help 信息过长、或使用了非标准输出方式。请尝试直接传入实际参数调用。`,
                 images: [],
             };
         } catch (e) {
