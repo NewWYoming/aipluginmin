@@ -140,6 +140,8 @@ cmdArgs.eatPrefixWith    = (..._s) => [cmdArgs.rawArgs, false];
 
 The polyfills are no-ops for the consumed cases (`chopPrefixToArgsWith` returns `false`; `eatPrefixWith` returns the raw text) but unblock the more common positional/kwarg accessors so the dispatch path matches what extension commands expect when invoked from the native command line.
 
+**`ShowHelp` handling.** SealDice's built-in extensions signal "show help" by returning `CmdExecuteResult{ showHelp: true }` from their `solve()` and rely on `tryItemSolve` (the normal command-dispatch pipeline) to read the flag and send the help text. `extensionSolve()` bypasses `tryItemSolve`, so before the fix the flag was silently discarded and the listen promise hit the 10s timeout whenever a delegated command returned a help-only result. After invoking `ext.cmdMap[name].solve(...)`, the code now inspects the return value; if `showHelp` is set, it resolves the listen promise directly with `cmd.help` (falling back to `cmd.shortHelp`, then a placeholder string). The `resolve` callback clears the timeout, so help text returns synchronously rather than after 10s.
+
 ### 3f. Universal Command Dispatch (`run_command`)
 
 `run_command` is a meta-tool: instead of wrapping a single SealDice extension command, it lets the AI dispatch to any command from any extension the operator has whitelisted. It is registered in `tool.ts` like every other tool, but its architecture is distinct.
