@@ -63,7 +63,7 @@ function buildDescription(): string {
         parts.push(`${trimmedName} (${sample}${names.length > 5 ? '/...' : ''}共${names.length}条)`);
     }
 
-    parts.push('。\n\n使用示例：run_command(extension="coc7", command="ra", args=["力量","50"])');
+    parts.push('。\n\n提示：如需了解某指令的详细用法，先用 args=["help"] 获取帮助。\n使用示例：run_command(extension="coc7", command="ra", args=["力量","50"])');
     return parts.join('');
 }
 
@@ -122,8 +122,8 @@ export function registerRunCommand() {
                     type: 'object',
                     properties: {
                         extension: { type: 'string', description: '扩展名称' },
-                        command: { type: 'string', description: '指令名称' },
-                        args: { type: 'array', items: { type: 'string' }, description: '位置参数列表（可选）' },
+                        command: { type: 'string', description: '指令名称。若不确定用法，先用 args=["help"] 获取帮助' },
+                        args: { type: 'array', items: { type: 'string' }, description: '位置参数列表。传 ["help"] 可查看该指令的详细用法' },
                     },
                     required: ['extension', 'command'],
                 },
@@ -175,7 +175,7 @@ export function registerRunCommand() {
             logger.warning(`[run_command] 扩展 '${extension}' 中未找到指令 '${command}'`);
             const available = getCommandsForExtension(extension);
             return {
-                content: `扩展 '${extension}' 中未找到指令 '${command}'。该扩展可用指令：${available}`,
+                content: `扩展 '${extension}' 中未找到指令 '${command}'。该扩展可用指令：${available}。如需了解某指令用法，请使用 args=["help"] 获取帮助`,
                 images: [],
             };
         }
