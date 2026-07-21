@@ -47,7 +47,8 @@ export class ToolConfig {
         ], "该功能在选择预设音色时，需要安装http依赖插件，且需要可以调用ai语音api版本的napcat/lagrange等。选择自定义音色时，则需要aitts依赖插件和ffmpeg");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "本地语音路径", ['data/records/钢管落地.mp3'], "如不需要可以不填写，修改完需要重载js。发送语音需要配置ffmpeg到环境变量中");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "允许AI通用调用的扩展", [
-        ], "每行一个扩展名（如coc7、fun、story），修改后保存并重载js。留空禁用通用调用。\n⚠ 允许一个扩展将暴露其几乎所有指令给AI，请确保了解该扩展包含哪些指令后再添加。");
+            '# 在此添加扩展名，例如：coc7',
+        ], "每行一个扩展名（如coc7、fun、story），修改后保存并重载js。留空或删除注释行禁用通用调用。\n⚠ 允许一个扩展将暴露其几乎所有指令给AI，请确保了解该扩展包含哪些指令后再添加。");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "通用工具指令黑名单", [
             'ban',
             'unload',

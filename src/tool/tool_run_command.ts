@@ -33,8 +33,14 @@ function normalizeArgs(raw: unknown): string[] {
     return raw.filter(v => v != null).map(v => String(v));
 }
 
+function getAllowedExtensions(): string[] {
+    return ConfigManager.tool.allowedExtensions
+        .map(e => e.trim())
+        .filter(e => e && !e.startsWith('#') && !e.startsWith('//'));
+}
+
 function buildDescription(): string {
-    const allowedExts = ConfigManager.tool.allowedExtensions;
+    const allowedExts = getAllowedExtensions();
     const parts = ['调用SealDice扩展指令。当前可用扩展：'];
 
     if (!allowedExts || allowedExts.length === 0) {
@@ -62,9 +68,8 @@ function buildDescription(): string {
 }
 
 function getAvailableExtensionsList(): string {
-    return ConfigManager.tool.allowedExtensions
-        .map(e => e.trim())
-        .filter(e => e && seal.ext.find(e))
+    return getAllowedExtensions()
+        .filter(e => seal.ext.find(e))
         .join(', ') || '(无)';
 }
 
@@ -137,7 +142,7 @@ export function registerRunCommand() {
         logger.info(`[run_command] uid=${ctx.player.userId} gid=${ctx.group?.groupId || ''} ext=${extension} cmd=${command} args=[${cmdArgs.join(',')}]`);
 
         // 1. Check extension is in allowed list
-        const allowedExts = ConfigManager.tool.allowedExtensions.map(e => e.trim());
+        const allowedExts = getAllowedExtensions();
         if (!allowedExts.includes(extension)) {
             logger.warning(`[run_command] 扩展 '${extension}' 未被允许`);
             return {
