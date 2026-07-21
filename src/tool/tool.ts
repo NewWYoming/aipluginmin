@@ -267,7 +267,15 @@ export class ToolManager {
             };
 
             try {
-                ext.cmdMap[cmdInfo.name].solve(ctx, msg, cmdArgs);
+                const solveResult = ext.cmdMap[cmdInfo.name].solve(ctx, msg, cmdArgs);
+                // 处理 ShowHelp 标记：内置扩展的 help 不会自己调 ReplyToSender，
+                // 而是设置此标记由 tryItemSolve 代为发送。但 extensionSolve 绕过了 tryItemSolve，
+                // 因此需要在此处直接读取 help 文本。
+                if (solveResult && (solveResult as any).showHelp) {
+                    const cmd = ext.cmdMap[cmdInfo.name];
+                    const helpText = cmd.help || (cmd as any).shortHelp || `${cmdInfo.name}: 无帮助信息`;
+                    ai.tool.listen.resolve(helpText);
+                }
             } catch (err) {
                 reject(new Error(`solve中发生错误:${err.message}`));
                 ai.tool.listen.cleanup();
