@@ -22,7 +22,7 @@ Each feature area has a dedicated file with a class that follows a uniform inter
 | `config_log.ts` | `LogConfig` | `aiplugin4` | Log verbosity |
 | `config_request.ts` | `RequestConfig` | `aiplugin4` | API provider, URL, key, model, thinking, body, memory model |
 | `config_message.ts` | `MessageConfig` | `aiplugin4_1:对话` | Role switching (roleSettingNames/roleSettingTemplate), system prompt template (incl. impression layer), history, timezone offset |
-| `config_tool.ts` | `ToolConfig` | `aiplugin4_2:函数调用` | Function-calling (toolsDefaultClosed, maxCallCount), voice, decks |
+| `config_tool.ts` | `ToolConfig` | `aiplugin4_2:函数调用` | Function-calling (toolsDefaultClosed, maxCallCount, toolsNotAllow), voice, decks, general-call extension allowlist (allowedExtensions) and command blacklist (commandBlacklist) |
 | `config_received.ts` | `ReceivedConfig` | `aiplugin4_3:消息接收与触发` | Trigger conditions, ignore patterns, rate limits |
 | `config_reply.ts` | `ReplyConfig` | `aiplugin4_4:回复` | Reply filtering, anti-repeat, regex processing |
 | `config_image.ts` | `ImageConfig` | `aiplugin4_5:图片` | Image recognition, storage, sending |
@@ -70,7 +70,7 @@ Plugin startup (src/index.ts → main())
        ├─ LogConfig.register()          → reuses "aiplugin4" ext, registers 1 option
        ├─ RequestConfig.register()      → reuses "aiplugin4" ext, registers 10 keys (added memoryModel, tool thinking/reasoning config)
        ├─ MessageConfig.register()      → creates "aiplugin4_1:对话" ext, registers 12 keys (roleSettingNames/roleSettingTemplate for role switching, utcOffset)
-       ├─ ToolConfig.register()          → creates "aiplugin4_2:函数调用" ext, registers 7 keys (maxCallCount, toolsDefaultClosed)
+       ├─ ToolConfig.register()          → creates "aiplugin4_2:函数调用" ext, registers 9 keys (maxCallCount, toolsDefaultClosed, 允许AI通用调用的扩展/allowedExtensions, 通用工具指令黑名单/commandBlacklist)
        ├─ ReceivedConfig.register()      → creates "aiplugin4_3:消息接收与触发" ext, registers ~8 keys
        ├─ ReplyConfig.register()         → creates "aiplugin4_4:回复" ext, registers ~6 keys
        ├─ ImageConfig.register()         → creates "aiplugin4_5:图片" ext, registers ~9 keys
