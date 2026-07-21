@@ -23,6 +23,7 @@ import { registerSetTrigger } from "./tool_trigger"
 import { registerMusicPlay } from "./tool_music"
 import { registerRender } from "./tool_render"
 import { registerTaskTools } from "./tool_task"
+import { registerRunCommand } from "./tool_run_command"
 import { logger } from "../logger"
 import { Image } from "../AI/image";
 import { fixJsonString } from "../utils/utils_string";
@@ -209,6 +210,7 @@ export class ToolManager {
         registerMusicPlay();
         registerRender();
         registerTaskTools();
+        registerRunCommand();
     }
 
     /**
@@ -228,6 +230,14 @@ export class ToolManager {
         cmdArgs.cleanArgs = cmdArgs.args.join(' ');
         cmdArgs.specialExecuteTimes = 0;
         cmdArgs.rawText = `.${cmdArgs.command} ${cmdArgs.rawArgs} ${at.map(item => `[CQ:at,qq=${item.userId.replace(/^.+:/, '')}]`).join(' ')}`;
+
+        // Polyfill CmdArgs runtime methods (SealDice normally provides these)
+        cmdArgs.getArgN = (n: number) => cmdArgs.args[n - 1] ?? '';
+        cmdArgs.getKwarg = (key: string) => cmdArgs.kwargs.find(k => k.name === key);
+        cmdArgs.getRestArgsFrom = (n: number) => cmdArgs.args.slice(n - 1).join(' ');
+        cmdArgs.isArgEqual = (n: number, ...s: string[]) => s.includes(cmdArgs.getArgN(n));
+        cmdArgs.chopPrefixToArgsWith = (..._s: string[]) => false;
+        cmdArgs.eatPrefixWith = (..._s: string[]) => [cmdArgs.rawArgs, false] as [string, boolean];
 
         const ext = seal.ext.find(cmdInfo.ext);
         if (!ext.cmdMap.hasOwnProperty(cmdInfo.name)) {

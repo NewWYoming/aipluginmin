@@ -16,7 +16,8 @@ export class ToolConfig {
         seal.ext.registerTemplateConfig(ToolConfig.ext, "默认关闭的函数", [
             'rename',
             'set_trigger_condition',
-            'music_play'
+            'music_play',
+            'run_command'
         ], "");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "提供给AI的牌堆名称", ["克苏鲁神话"], "没有的话建议把draw_deck这个函数加入不允许调用");
         seal.ext.registerOptionConfig(ToolConfig.ext, "ai语音使用的音色", '傲娇少女', [
@@ -45,6 +46,28 @@ export class ToolConfig {
             "自定义"
         ], "该功能在选择预设音色时，需要安装http依赖插件，且需要可以调用ai语音api版本的napcat/lagrange等。选择自定义音色时，则需要aitts依赖插件和ffmpeg");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "本地语音路径", ['data/records/钢管落地.mp3'], "如不需要可以不填写，修改完需要重载js。发送语音需要配置ffmpeg到环境变量中");
+        seal.ext.registerTemplateConfig(ToolConfig.ext, "允许AI通用调用的扩展", [
+        ], "每行一个扩展名（如coc7、fun、story），修改后保存并重载js。留空禁用通用调用。\n⚠ 允许一个扩展将暴露其几乎所有指令给AI，请确保了解该扩展包含哪些指令后再添加。");
+        seal.ext.registerTemplateConfig(ToolConfig.ext, "通用工具指令黑名单", [
+            'ban',
+            'unload',
+            'master',
+            'admin',
+            'bot',
+            'ext',
+            'dismiss',
+            'update',
+            'backup',
+            'conf',
+            'sendto',
+            'ai',
+            'AI',
+            'on',
+            'off',
+            'tool',
+            'privilege',
+            'shut',
+        ], "每行一个指令名，禁止被通用调用。默认屏蔽高危指令和本插件自身指令。支持 ext:cmd 格式精确屏蔽（如coc7:st）。修改后保存并重载js。");
     }
 
     static get() {
@@ -54,6 +77,8 @@ export class ToolConfig {
             toolsNotAllow: seal.ext.getTemplateConfig(ToolConfig.ext, "不允许调用的函数"),
             toolsDefaultClosed: seal.ext.getTemplateConfig(ToolConfig.ext, "默认关闭的函数"),
             decks: seal.ext.getTemplateConfig(ToolConfig.ext, "提供给AI的牌堆名称"),
+            allowedExtensions: seal.ext.getTemplateConfig(ToolConfig.ext, "允许AI通用调用的扩展"),
+            commandBlacklist: seal.ext.getTemplateConfig(ToolConfig.ext, "通用工具指令黑名单"),
             character: seal.ext.getOptionConfig(ToolConfig.ext, "ai语音使用的音色"),
             recordPathMap: ConfigManager.getPathMapConfig(ToolConfig.ext, "本地语音路径"),
         }
