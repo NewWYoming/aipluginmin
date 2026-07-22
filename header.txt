@@ -2,7 +2,7 @@
 // @name         AI骰娘4
 // @author       错误、白鱼、NorthWyoming
 // @version      5.1.24
-// @description  适用于大部分OpenAI API兼容格式AI的模型插件（Deepseek/OpenAI等），内置45+工具函数（属性检定、牌堆抽取、记忆管理、图片识别、定时任务等），支持长期记忆、印象系统、任务提醒、跨群印象查看等功能。使用.ai help查看使用方法。具体配置查看插件配置项。
+// @description  适用于大部分OpenAI API兼容格式AI的模型插件（Deepseek/OpenAI等），内置~50工具函数（属性检定、牌堆抽取、记忆管理、图片识别、定时任务等），支持长期记忆、印象系统、任务提醒、跨群印象查看等功能。使用.ai help查看使用方法。具体配置查看插件配置项。
 // @timestamp    1733387279
 // 2024-12-05 16:27:59
 // @license      MIT
