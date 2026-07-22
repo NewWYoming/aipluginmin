@@ -154,7 +154,7 @@ export function registerMessage() {
 
         const result = await getMsg(epId, transformMsgIdBack(msg_id));
         if (!result) return { content: `获取消息 ${msg_id} 失败`, images: [] };
-        const messageArray: MessageSegment[] = result.message.filter((item: MessageSegment) => item.type === 'text' && !CQTYPESALLOW.includes(item.type));
+        const messageArray: MessageSegment[] = result.message.filter((item: MessageSegment) => item.type === 'text' || CQTYPESALLOW.includes(item.type));
 
         const { content, images } = await transformArrayToContent(ctx, ai, messageArray);
 

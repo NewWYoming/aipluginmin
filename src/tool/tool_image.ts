@@ -216,7 +216,8 @@ export function registerImage() {
             }
         }
 
-        seal.replyToSender(ctx, msg, '[CQ:image,file=' + entry.file + ']');
+        const safeFile = entry.file.replace(/\]/g, '\\]').replace(/\n/g, '').replace(/\r/g, '');
+        seal.replyToSender(ctx, msg, '[CQ:image,file=' + safeFile + ']');
         const img = new Image();
         img.id = entry.id;
         img.file = entry.file;
