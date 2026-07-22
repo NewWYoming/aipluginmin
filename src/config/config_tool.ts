@@ -17,6 +17,7 @@ export class ToolConfig {
             'rename',
             'set_trigger_condition',
             'music_play',
+            'image_to_text',
             'run_command'
         ], "");
         seal.ext.registerTemplateConfig(ToolConfig.ext, "提供给AI的牌堆名称", ["克苏鲁神话"], "没有的话建议把draw_deck这个函数加入不允许调用");

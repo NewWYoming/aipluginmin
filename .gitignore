@@ -17,3 +17,6 @@ dev/
 docs/
 .playwright-mcp/
 .slim/
+.agents/
+.claude/
+skills-lock.json
