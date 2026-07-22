@@ -114,6 +114,17 @@ export interface MessageSegment {
     };
 }
 
+export function parseImgToken(raw: string): { id: string; desc: string } {
+    if (/^(user_avatar|group_avatar)[：:]/.test(raw)) {
+        const prefix = raw.match(/^(user_avatar|group_avatar)/)![0];
+        const rest = raw.slice(prefix.length + 1);
+        return { id: prefix + ':' + rest, desc: '' };
+    }
+    const colonIdx = raw.search(/[：:]/);
+    if (colonIdx === -1) return { id: raw, desc: '' };
+    return { id: raw.slice(0, colonIdx), desc: raw.slice(colonIdx + 1) };
+}
+
 export function transformTextToArray(text: string): MessageSegment[] {
     const segments = text.split(/(\[CQ:.*?\])/).filter(segment => segment);
     const messageArray: MessageSegment[] = [];
@@ -267,6 +278,17 @@ async function transformContentToText(ctx: seal.MsgContext, ai: AI, content: str
             case 'face': {
                 const faceId = Object.keys(faceMap).find(key => faceMap[key] === seg.content) || '';
                 text += faceId ? `[CQ:face,id=${faceId}]` : '';
+                break;
+            }
+            case 'img': {
+                const { id } = parseImgToken(seg.content);
+                const image = await ai.context.findImage(ctx, id);
+                if (image) {
+                    text += image.CQCode;
+                    images.push(image);
+                } else {
+                    logger.warning(`无法找到图片：${id}`);
+                }
                 break;
             }
         }

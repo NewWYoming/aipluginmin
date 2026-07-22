@@ -217,6 +217,10 @@ export function registerImage() {
         }
 
         seal.replyToSender(ctx, msg, '[CQ:image,file=' + entry.file + ']');
-        return { content: '', images: [] };
+        const img = new Image();
+        img.id = entry.id;
+        img.file = entry.file;
+        img.content = entry.description;
+        return { content: `已发送图片：${entry.description || entry.id}`, images: [img] };
     };
 }
