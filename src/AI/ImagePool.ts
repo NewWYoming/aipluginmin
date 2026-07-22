@@ -100,7 +100,7 @@ export class ImagePool {
     if (stolen.length === 0) return '';
     if (page > Math.ceil(stolen.length / 5)) page = Math.ceil(stolen.length / 5);
     return stolen.slice((page - 1) * 5, page * 5)
-      .map((img, i) => (i + 1 + (page - 1) * 5) + '. 描述:' + (img.description || '无') + '\n[CQ:image,file=' + img.file + ']')
+      .map((img, i) => (i + 1 + (page - 1) * 5) + '. 描述:' + (img.description || '无') + '\n[CQ:image,file=' + img.file.replace(/\]/g, '\\]') + ']')
       .join('\n') + '\n当前页码:' + page + '/' + Math.ceil(stolen.length / 5);
   }
 
