@@ -167,7 +167,7 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 | 提供给AI的牌堆名称 | 提供给AI可用于函数调用的牌堆名称，没有的话建议把draw_deck这个函数加入不允许调用  |
 | 允许AI通用调用的扩展 | 每行一个扩展名，添加后AI可通过run_command调用该扩展的所有指令（受黑名单限制）。建议按需添加，避免过度暴露。默认不开放任何扩展 |
 | 通用工具指令黑名单 | 每行一个指令名，即使在允许调用的扩展中，黑名单内的指令也不会被AI调用。已预填安全敏感的默认值 |
-| ai语音使用的音色  | 该功能在选择预设音色时，需要安装[ob11网络连接依赖.js](https://raw.githubusercontent.com/error2913/sealdice-plugin-ob11-net-connection/refs/heads/main/dist/ob11%E7%BD%91%E7%BB%9C%E8%BF%9E%E6%8E%A5%E4%BE%9D%E8%B5%96.js)，且需要可以调用ai语音api版本的napcat/lagrange等。选择自定义音色时，则需要[aitts依赖插件](https://github.com/baiyu-yu/plug-in/blob/main/AITTS.js)和ffmpeg |
+| ai语音使用的音色  | 该功能在选择预设音色时，需要安装[ob11网络连接依赖.js](https://raw.githubusercontent.com/error2913/sealdice-plugin-ob11-net-connection/refs/heads/main/dist/ob11%E7%BD%91%E7%BB%9C%E8%BF%9E%E6%8E%A5%E4%BE%9D%E8%B5%96.js)，且需要可以调用ai语音api版本的napcat/lagrange等。自定义音色需配置TTS服务商及API Key |
 | 本地语音路径     | 如不需要可以不填写，修改完需要重载js。发送语音需要配置ffmpeg到环境变量中                                                                                                                                                                                          |
 | TTS 服务商     | 文本转语音服务商，当前支持 dashscope                                                                                                                                                         |
 | TTS API Key     | TTS 服务的 API Key                                                                                                                                                        |
@@ -272,21 +272,9 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 | 是否启用长期记忆            | 是否启用AI的长期记忆功能                                                                                                      |
 | 长期记忆上限              | 设置长期记忆的最大数量                  |
 | 长期记忆展示数量            | 设置AI回答时展示的长期记忆数量                                                                                                    |
-| 长期记忆是否启用向量          | 是否为长期记忆启用向量搜索功能，向量搜索更容易找到相关记忆                                                                                                   |
-| 向量维度                | 设置向量的维度，越高越能捕捉语义相似性                                                                                                    |
-| 嵌入url地址              | 设置用于生成向量的嵌入模型API地址                                                                                                 |
-| 嵌入API Key             | 设置嵌入模型的API Key                                                                                                        |
-| 嵌入body               | 设置嵌入模型的请求体，见下表                                                                                             |
 | 长期记忆展示模板            | 给AI提供的长期记忆在上下文中的展示格式，一般不需要修改                              |
 | 单条长期记忆展示模板          | 给AI提供的单条长期记忆在上下文中的展示格式，一般不需要修改       |
 | 任务提醒润色提示            | AI在发送任务提醒时的润色方向提示，可自定义提醒语气                                       |
-| 是否启用短期记忆            | 是否启用AI的短期记忆功能，隔一定轮数自动总结记忆当前上下文                              |
-| 短期记忆上限              | 设置短期记忆的最大数量          |
-| 短期记忆总结轮数            | 设置短期记忆自动总结的间隔轮数                            |
-| 记忆总结 url地址           | 设置用于总结短期记忆的API地址，为空时默认使用对话接口                       |
-| 记忆总结 API Key          | 设置记忆总结API的Key，若使用对话接口无需填写                                                                                            |
-| 记忆总结 body            | 设置记忆总结的请求体                                        |
-| 记忆总结prompt模板         | 给AI提供的用于总结短期记忆的prompt模板，一般不需要修改                              |
 | 记忆辅助模型         | 用于印象生成和记忆总结的轻量模型配置（body格式），为空则复用对话模型                              |
 | 印象·最大观察消息数         | 印象记录前收集的消息条数                              |
 | 印象·最长天数         | 印象未更新后自动刷新的天数                              |
@@ -294,10 +282,6 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 | 印象·清理未活跃天数         | 非活跃用户的印象保留天数                              |
 
 
-> | body默认值            | 说明                                                                                               |
-> |:------------------:|:------------------------------------------------------------------------------------------------:|
-> | `"model":"text-embedding-v4"` | 模型名，查看接口文档获取，一般含有embedding字样                       |
-> | `"encoding_format":float`  | 嵌入向量的数据类型，查看接口文档                      |
 ---
 
 ## 💻 完整命令手册
@@ -494,16 +478,16 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 
 | 大模型平台                                                           | 调用url                                                                      | 文档地址                                                                                                                               | 支持语言大模型                                                                                                                           | 支持视觉大模型                                                  |
 |:---------------------------------------------------------------:|:--------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------:|
-| [deepseek](https://platform.deepseek.com)                       | `https://api.deepseek.com/chat/completions`                                | [deepseek API文档](https://api-docs.deepseek.com/zh-cn)                                                                              | `deepseek-chat`,`deepseek-reasoner`×▲                                                                                             | -                                                        |
-| [kimi](https://platform.moonshot.cn/console)                    | `https://api.moonshot.cn/v1/chat/completions`                              | [Moonshot AI 使用手册](https://platform.moonshot.cn/docs)                                                                              | `moonshot-v1-8k`,`moonshot-v1-32k`,`moonshot-v1-128k`,`moonshot-v1-auto`                                                          | -                                                        |
-| [百炼大模型](https://www.aliyun.com/product/bailian/getting-started) | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`       | [大模型服务平台百炼产品文档](https://help.aliyun.com/zh/model-studio/getting-started/what-is-model-studio)                                      | `qwen-max`,`qwen-plus`,`qwen-turbo`,`qwen-long`,`deepseek-r1`×▲,`deepseek-v3`×                                                    | `qwen-vl-max`,`qwen-vl-plus`                             |
-| [智谱AI](https://www.bigmodel.cn/console/overview)                | `https://open.bigmodel.cn/api/paas/v4/chat/completions`                    | [BigModel 接口文档](https://www.bigmodel.cn/dev/api)                                                                                   | `glm-4-plus`,`glm-4-air`,`glm-4-air-0111`,`glm-4-airx`,`glm-4-long`,`glm-4-flashx`,`glm-4-flash`,`glm-zero-preview`×,`charglm-4`× | `glm-4v-plus-0111`,`glm-4v-plus`,`glm-4v`,`glm-4v-flash` |
-| [百度千帆大模型平台](https://console.bce.baidu.com/qianfan/overview)     | `https://qianfan.baidubce.com/v2/chat/completions`                         | [千帆大模型服务与开发平台ModelBuilder文档](https://cloud.baidu.com/doc/WENXINWORKSHOP/s/Zm2ycv77m)                                               | `ernie-4.0-8k`▲,`ernie-4.0-turbo-8k`▲,`ernie-3.5-8k`▲,`deepseek-v3`×▲,`deepseek-r1`×▲                                             | `deepseek-vl2`                                           |
-| [讯飞星火大模型](https://console.xfyun.cn/services)                    | `https://spark-api-open.xf-yun.com/v1/chat/completions`                    | [讯飞开放平台文档中心](https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html#_1-%E6%8E%A5%E5%8F%A3%E8%AF%B4%E6%98%8E) | `lite`×,`generalv3`×,`pro-128k`×,`generalv3.5`×,`max-32k`,`4.0Ultra`                                                              |                                                          |
-| [google AI](https://ai.google.dev/)                             | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | [gemini API 文档](https://ai.google.dev/api)                                                                                         | `gemini-2.0-flash`,`gemini-1.5-flash`,`gemini-1.5-pro`                                                                            |                                                          |
-| [openAI](https://openai.com/api/)                               | `https://api.openai.com/v1/chat/completions`                               | [openAI API 文档](https://platform.openai.com/docs/quickstart)                                                                       | `gpt-4o`,`gpt-4o-mini`,`o1`,`o3-mini`,`gpt-4-turbo`,`gpt-3.5-turbo`                                                               | `gpt-4-turbo`,`gpt-4o`,`o1`,`gpt-4o-mini`                |
+| [deepseek](https://platform.deepseek.com)                       | `https://api.deepseek.com/chat/completions`                                | [deepseek API文档](https://api-docs.deepseek.com/zh-cn)                                                                              | `deepseek-v4-pro`★,`deepseek-v4-flash`                                                                                             | -                                                        |
+| [kimi](https://platform.moonshot.cn/console)                    | `https://api.moonshot.cn/v1/chat/completions`                              | [Moonshot AI 使用手册](https://platform.moonshot.cn/docs)                                                                              | `kimi-k3`,`kimi-k2.7-code`,`kimi-k2.6`                                                          | -                                                        |
+| [百炼大模型](https://www.aliyun.com/product/bailian/getting-started) | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`       | [大模型服务平台百炼产品文档](https://help.aliyun.com/zh/model-studio/getting-started/what-is-model-studio)                                      | `qwen3.7-max`,`qwen3.7-plus`,`qwen3.6-flash`,`deepseek-v3`×,`deepseek-r1`×                                                    | `qwen3.7-plus`                             |
+| [智谱AI](https://www.bigmodel.cn/console/overview)                | `https://open.bigmodel.cn/api/paas/v4/chat/completions`                    | [BigModel 接口文档](https://www.bigmodel.cn/dev/api)                                                                                   | `glm-5.2`★,`glm-5.1`,`glm-4.7`,`glm-4.7-flashx` | `glm-5v-turbo`,`glm-4.7-flashx` |
+| [豆包/火山引擎](https://www.volcengine.com/product/doubao)                    | `https://ark.cn-beijing.volces.com/api/v3/chat/completions`                    | [火山引擎方舟文档](https://www.volcengine.com/docs/82379) | `doubao-seed-2-1-pro`★,`doubao-seed-2-1-turbo`,`doubao-seed-2.0-pro`                                                         | `doubao-seed-2.0-pro`                                           |
+| [xAI Grok](https://x.ai)                    | `https://api.x.ai/v1/chat/completions`                    | [xAI API 文档](https://docs.x.ai) | `grok-4.5`★,`grok-4.3`                                                         | `grok-4.5`                                           |
+| [google AI](https://ai.google.dev/)                             | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | [gemini API 文档](https://ai.google.dev/api)                                                                                         | `gemini-3.6-flash`★,`gemini-3.5-flash`,`gemini-2.5-pro`                                                                            | `gemini-3.6-flash`                                                          |
+| [openAI](https://openai.com/api/)                               | `https://api.openai.com/v1/chat/completions`                               | [openAI API 文档](https://platform.openai.com/docs/quickstart)                                                                       | `gpt-5.6-sol`★,`gpt-5.6-terra`,`gpt-5.6-luna`,`gpt-5.5`                                                               | `gpt-5.6-sol`                |
 
-> 注：×为不支持function call。▲为需要开启合并user消息开关。
+> 注：★为推荐默认模型。×为不支持function call。▲为需要开启合并user消息开关。部分旧模型已停用（deepseek-chat 2026.7.24、moonshot-v1 2026.8.31、GPT-4o/o1等 2026.2已停用），请确保使用最新模型名。
 
 > 视觉模型不一定支持QQ图床识别，可使用中转插件。
 
