@@ -205,7 +205,7 @@ ${img.CQCode}`;
             const { condition } = ConfigManager.image;
             const fmtCondition = parseInt(seal.format(ctx, `{${condition}}`));
             if (fmtCondition === 1) {
-                const poolEntry = ai.imagePool.images.find(e => e.file === image.file);
+                const poolEntry = this.imagePool.images.find(e => e.file === image.file);
                 if (poolEntry?.description) {
                     image.content = poolEntry.description;
                     logger.info(`imageToText skipped: pool hit for ${image.file}`);
