@@ -33,12 +33,12 @@ Bump both before committing. Do not bump for docs-only or AGENTS.md-only changes
 
 ## Workflow for changes
 
-**Non-trivial changes must follow: brainstorm → design → plan → implement.** Do not jump directly to code edits for features, refactors, or structural changes.
+**Non-trivial changes must follow: spec → design → plan → implement.** Do not jump directly to code edits for features, refactors, or structural changes.
 
-1. **Brainstorm** — load `brainstorming` skill, explore context, ask questions, propose approaches, get user approval
-2. **Design doc** — write to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
-3. **Implementation plan** — load `writing-plans` skill, write to `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md`
-4. **Implement** — execute plan with `subagent-driven-development` (preferred) or `executing-plans`
+1. **Grill / Spec** — use `grill-me` to stress-test the idea, or `to-spec` to synthesize conversation into a published spec
+2. **Design doc** — write to `docs/specs/YYYY-MM-DD-<topic>-design.md`
+3. **Implementation plan** — use `to-tickets` to break the design into tracer-bullet tickets with explicit dependencies
+4. **Implement** — use `implement` skill to drive `tdd` at seams, close with `code-review`
 
 Exceptions: trivial bugfixes (<10 lines, single file), config default changes, log line additions, version bumps themselves.
 
@@ -60,7 +60,7 @@ Example of this flow in practice: vector dead code cleanup → Jina EOF debuggin
 
 When a code review or investigation surfaces **multiple bugs/issues** (5+), do not try to fix them all at once. Instead:
 
-1. **Create tracking document** — write to `docs/superpowers/plans/YYYY-MM-DD-<topic>-fixes-plan.md` with this structure:
+1. **Create tracking document** — write to `docs/plans/YYYY-MM-DD-<topic>-fixes-plan.md` with this structure:
 
    - **Main task table**: task ID, name, affected file(s), severity (🔴/🟠/🟡/🔵), overall progress (⬜/🔄/✅)
    - **Per-task sub-task tables**: sub-task ID, description, file:line, progress, notes
