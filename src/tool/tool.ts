@@ -199,7 +199,7 @@ export class ToolManager {
         registerTTS();
         registerTime();
         registerWeb();
-        // registerImage();
+        registerImage();
         registerGroupSign();
         registerGetPersonInfo();
         registerMessage();

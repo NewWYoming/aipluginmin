@@ -6,6 +6,9 @@ import { aliasMap } from "../config/config";
 import { netExists, sendGroupMsg, sendPrivateMsg } from "./utils_ob11";
 
 export function transformMsgId(msgId: string | number | null): string {
+    if (msgId !== null && typeof msgId === 'object' && 'MessageId' in msgId) {
+        msgId = (msgId as any).MessageId;
+    }
     if (msgId === null) {
         return '';
     }
