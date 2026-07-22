@@ -3,7 +3,7 @@
 - 让你的骰娘活起来
 
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Version](https://img.shields.io/badge/Version-5.1.14-green)
+![Version](https://img.shields.io/badge/Version-5.1.24-green)
 
 ## 快速开始
 
@@ -61,10 +61,11 @@
 AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于OpenAI兼容API开发。本插件深度整合了海豹骰子核心功能，提供以下核心能力：
 
 - **智能对话**：支持上下文感知的AI对话
-- **多功能集成**：内置45+实用功能（属性检定、牌堆抽取、记忆管理等），并且持续更新
+- **多功能集成**：内置47+实用功能（属性检定、牌堆抽取、记忆管理、通用指令调用等），持续更新
 - **图像处理**：支持图片识别、表情包管理和盗图功能
 - **权限系统**：多维度权限控制体系
 - **任务提醒**：支持AI创建和管理定时任务，到时间自动提醒并触发对话
+- **通用指令调用**：AI可调用已安装的其他SealDice扩展指令（如算卦、COC等），需要配置白名单
 - **印象系统**：自动记录用户印象，支持跨群查看
 
 ---
@@ -166,6 +167,8 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 | 不允许调用的函数   | 修改后保存并重载js,设置后将不被允许开启，函数名可对骰娘发送.ai tool 查看                                                                                                                                                                                        |
 | 默认关闭的函数    | AI在加入新群时，默认关闭对该函数调用，在开启后才能调用的函数，函数名可对骰娘发送.ai tool 查看                                                                                                                                                                              |
 | 提供给AI的牌堆名称 | 提供给AI可用于函数调用的牌堆名称，没有的话建议把draw_deck这个函数加入不允许调用  |
+| 允许AI通用调用的扩展 | 每行一个扩展名，添加后AI可通过run_command调用该扩展的所有指令（受黑名单限制）。建议按需添加，避免过度暴露。默认不开放任何扩展 |
+| 通用工具指令黑名单 | 每行一个指令名，即使在允许调用的扩展中，黑名单内的指令也不会被AI调用。已预填安全敏感的默认值 |
 | ai语音使用的音色  | 该功能在选择预设音色时，需要安装[ob11网络连接依赖.js](https://raw.githubusercontent.com/error2913/sealdice-plugin-ob11-net-connection/refs/heads/main/dist/ob11%E7%BD%91%E7%BB%9C%E8%BF%9E%E6%8E%A5%E4%BE%9D%E8%B5%96.js)，且需要可以调用ai语音api版本的napcat/lagrange等。选择自定义音色时，则需要[aitts依赖插件](https://github.com/baiyu-yu/plug-in/blob/main/AITTS.js)和ffmpeg |
 | 本地语音路径     | 如不需要可以不填写，修改完需要重载js。发送语音需要配置ffmpeg到环境变量中                                                                                                                                                                                          |
 
@@ -404,6 +407,7 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 | jrrp                  | 查看今日人品                   |                                      |
 | modu_roll             | 随机抽取COC模组                |                                      |
 | modu_search           | 搜索COC模组                  |                                      |
+| run_command           | 调用任意已安装扩展的指令         | 需要在配置中开启允许的扩展并设置黑名单                   |
 | roll_check            | 技能/属性检定                  |                                      |
 | san_check             | San值检定                   |                                      |
 | rename                | 设置群名片                    |                                      |
@@ -495,7 +499,7 @@ aiplugin4/
 │   │   ├── configManager.ts  # 配置总管理
 │   │   ├── config.ts  # 默认配置
 │   │   └── config_...  # 各种配置的相应管理
-│   ├── tool/          # 调用函数扩展 (22 files, ~46 tools)
+│   ├── tool/          # 调用函数扩展 (24 files, ~47 tools)
 │   │   ├── tool.ts     # 工具总管理
 │   │   └── tool_...     # 各种工具的实现
 │   ├── AI/            # 核心逻辑
