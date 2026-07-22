@@ -3,11 +3,11 @@ import { sendITTRequest } from "../service/legacy";
 import { generateId } from "../utils/utils";
 import { logger } from "../logger";
 import { AI } from "./AI";
-import { MessageSegment, parseSpecialTokens } from "../utils/utils_string";
+import { MessageSegment, parseImgToken, parseSpecialTokens } from "../utils/utils_string";
 import { ImagePool, ImageEntry } from './ImagePool';
 
 export class Image {
-    static validKeys: (keyof Image)[] = ['id', 'file', 'content'];
+    static validKeys: (keyof Image)[] = ['id', 'file', 'content', 'source'];
     id: string;
     file: string; // 图片url或本地路径
     content: string;
@@ -204,7 +204,15 @@ ${img.CQCode}`;
             image.file = file;
             const { condition } = ConfigManager.image;
             const fmtCondition = parseInt(seal.format(ctx, `{${condition}}`));
-            if (fmtCondition === 1) await image.imageToText();
+            if (fmtCondition === 1) {
+                const poolEntry = ai.imagePool.images.find(e => e.file === image.file);
+                if (poolEntry?.description) {
+                    image.content = poolEntry.description;
+                    logger.info(`imageToText skipped: pool hit for ${image.file}`);
+                } else {
+                    await image.imageToText();
+                }
+            }
 
             // Parse JSON result from imageToText (new JSON prompt)
             let text1 = '', text2 = image.content, isEmoji = false;
@@ -254,7 +262,7 @@ ${img.CQCode}`;
         for (const seg of segs) {
             switch (seg.type) {
                 case 'img': {
-                    const id = seg.content;
+                    const { id } = parseImgToken(seg.content);
                     const image = await ai.context.findImage(ctx, id);
 
                     if (image) {
