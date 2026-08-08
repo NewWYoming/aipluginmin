@@ -14,7 +14,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 |---|---|---|---|
 | `tool.ts` | (framework) | Core: `Tool` class + `ToolManager` registry |
 | `sample.ts` | `sample` | Template / reference (not registered) |
-| `tool_memory.ts` | `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Memory CRUD. _Aug 8: `name` 参数激活（`add_memory`/`search_memory` 经 `findUserInfo` 解析并入 userList，按 id 去重）；`search_memory` 按 `target` 区分知识库（全局数据，userList/groupList 传空）与长期记忆（当前场景限定 + `hardUserFilter` 硬过滤）；`del_memory` 返回真实删除数（`id_list` 为 6 位 base36 字符串）_ |
+| `tool_memory.ts` | `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Memory CRUD. _Aug 8: `name` 参数激活（`add_memory`/`search_memory` 经 `findUserInfo` 解析并入 userList，按 id 去重）；`search_memory` 按 `target` 区分知识库（全局数据，userList/groupList 传空）与长期记忆（当前场景限定 + `hardUserFilter` 硬过滤）；`del_memory` 返回真实删除数（`id_list` 为 6 位 base36 字符串）_ _Aug 9: `del_memory` 必填弱化为 `['memory_type', 'name']`（`id_list`/`keywords` 可选）；`clear_memory` 移除 `name` 参数（`properties: {}`、`required: []`，无参工具，solve 签名改 `(ctx, _, ai, _args)`）_ |
 | `tool_attr.ts` | `attr_show`, `attr_get`, `attr_set` | COC 7th attributes |
 | `tool_roll_check.ts` | `roll_check`, `san_check` | COC 7th dice rolling |
 | `tool_modu.ts` | `modu_roll`, `modu_search` | COC module/story |

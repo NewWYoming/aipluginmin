@@ -92,7 +92,7 @@ Runtime access (any module):
 ### `config.ts` — Constants
 
 This file is not a config class. It exports plain constants used throughout the plugin:
-- `VERSION` (currently `5.1.31`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata.
+- `VERSION` (currently `5.1.32`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata.
 - `CQTYPESALLOW` — allowed CQ message types.
 - `PRIVILEGELEVELMAP` — role-to-permission-level mapping.
 - `HELPMAP` — help text definitions for commands.
