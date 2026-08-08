@@ -145,15 +145,18 @@ export interface Impression {
 }
 
 export class MemoryManager {
-    static validKeys: (keyof MemoryManager)[] = ['memoryMap', 'impressions', 'observations'];
+    static validKeys: (keyof MemoryManager)[] = ['memoryMap', 'impressions', 'observations', '_lastTidyDate'];
     memoryMap: { [id: string]: Memory };
     impressions: { [userId: string]: Impression };
     observations: { [userId: string]: UserObservation };
+    /** F3: 每日记忆整理门闩（存 toDateString()，随 validKeys 持久化——revive 只拷贝 validKeys 字段，防重启当天二次执行） */
+    _lastTidyDate: string;
 
     constructor() {
         this.memoryMap = {};
         this.impressions = {};
         this.observations = {};
+        this._lastTidyDate = '';
     }
 
     reviveMemoryMap() {
@@ -304,6 +307,70 @@ export class MemoryManager {
         if (restIds.length > 0) this.deleteMemory(restIds);
 
         return m;
+    }
+
+    /** F3: 每日一次的记忆整理（合并重复 + 删除冗余）。force=true 手动全权整理（跳过数量门槛）。返回 0=跳过/1=成功/2=失败 */
+    async tidyMemories(force: boolean = false): Promise<number> {
+        const today = new Date().toDateString();
+        // M1: 门闩检查——守卫早退不消耗当日门闩（条件随每条消息重新评估）
+        if (this._lastTidyDate === today) return 0;
+        // M4: force=true 跳过 length<10 守卫（手动全权整理）；force=false 自动路径检查数量门槛与触发条件
+        if (!force) {
+            if (this.memoryList.length < 10) return 0;
+            const now = Math.floor(Date.now() / 1000);
+            const hasOld = this.memoryList.some(m => (now - m.createTime > 30 * 86400) || (now - m.lastMentionTime > 30 * 86400)); // M6: OR 语义
+            if (this.memoryList.length < 20 && !hasOld) return 0;
+        }
+        // M1: 守卫通过后置门闩（LLM 工作前——fire-and-forget 窗口竞态保护；守卫→置位间无 await，单线程安全；失败不回滚=当日不重试）
+        this._lastTidyDate = today;
+        // LLM 整理
+        try {
+            const listText = this.memoryList.map(m => `[${m.id}] ${m.text.slice(0, 100)}（时间:${fmtDate(m.createTime, ConfigManager.message.utcOffset)}，权重:${m.weight}）`).join('\n');
+            const prompt = '你是记忆库整理助手。根据以下记忆列表，找出：\n1. obsolete: 明显过时/无价值的记忆 id 列表（最多5个）\n2. duplicates: 语义重复的记忆 id 对（每组2个，最多2组）\n不确定的不要列入。\n\n记忆列表:\n' + listText + '\n\n返回 JSON: {"obsolete": ["id1"], "duplicates": [["id1","id2"]]}';
+            const requestConfig = ConfigManager.request;
+            const client = new AIClient({
+                apiProvider: requestConfig.apiProvider,
+                url: requestConfig.url,
+                apiKey: requestConfig.apiKey,
+                model: requestConfig.memoryModel,
+                maxTokens: 256,
+                timeout: 15000,
+                thinkingEnabled: false,
+                reasoningEffort: 'low',
+                toolThinkingEnabled: false,
+                toolReasoningEffort: 'minimal',
+                extraBody: {},
+            });
+            const response = await client.chat(
+                [{ role: 'user', content: prompt }],
+                null, 'none',
+            );
+            const parsed = JSON.parse(fixJsonString(response.content || '{}'));
+            const obsolete: string[] = (parsed.obsolete || []).slice(0, 5).filter((id: any) => this.memoryMap[id]);
+            const duplicates: string[][] = (parsed.duplicates || []).slice(0, 2)
+                .map((pair: any) => pair.filter((id: any) => this.memoryMap[id]))
+                .filter((pair: any) => pair.length >= 2);
+            // 直接执行——obsolete: M5 先取值再删（日志保留完整文本）
+            if (obsolete.length > 0) {
+                const texts = obsolete.map(id => this.memoryMap[id]?.text.slice(0, 50));
+                this.deleteMemory(obsolete);
+                logger.info(`tidy 删除过时记忆: ${obsolete.length}条 [${texts.join(' | ')}]`);
+            }
+            // duplicates: 每组 generateMergeText → mergeMemories；null 跳过该组（不删）
+            for (const pair of duplicates) {
+                // Set 去重防组内重复 id（与 merge_memory 工具 M1 修复同源：重复对象会让 mergeMemories 的 restIds 误删基准）
+                const group = [...new Set(pair)].map(id => this.memoryMap[id]).filter(m => m);
+                if (group.length < 2) continue;
+                const merged = await generateMergeText(group);
+                if (!merged) { logger.warning(`tidy 合并失败跳过: [${pair.join(',')}]`); continue; }
+                const result = this.mergeMemories(group, merged.text, merged.keywords);
+                logger.info(`tidy 合并重复: ${group.length}条 → ${result.id}`);
+            }
+            return 1;
+        } catch (e: any) {
+            logger.error(`tidy 整理失败: ${e?.message || e}`);
+            return 2;  // 门闩已置，当日不重试
+        }
     }
 
     limitMemory() {

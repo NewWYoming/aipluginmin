@@ -13,14 +13,14 @@ interface MemoryScopeConfig {
     sessionInfoName: string;
 }
 
-function handleMemoryScope(
+async function handleMemoryScope(
     ctx: seal.MsgContext,
     msg: seal.Message,
     cmdArgs: seal.CmdArgs,
     ret: seal.CmdExecuteResult,
     page: number,
     cfg: MemoryScopeConfig
-): seal.CmdExecuteResult | Promise<seal.CmdExecuteResult> {
+): Promise<seal.CmdExecuteResult> {
     const val3 = cmdArgs.getArgN(3);
     switch (aliasToCmd(val3)) {
         case 'delete': {
@@ -47,10 +47,17 @@ function handleMemoryScope(
             }, page) || '无记忆');
             return ret;
         }
+        case 'tidy': {
+            const result = await cfg.ai.memory.tidyMemories(true);
+            if (result === 1) AIManager.saveAI(cfg.saveId);   // M2: 命令路径也 save
+            seal.replyToSender(ctx, msg, result === 1 ? '记忆整理完成' : result === 2 ? '记忆整理失败，已记录日志' : '今日已整理过，明天再试');
+            return ret;
+        }
         default: {
             seal.replyToSender(ctx, msg, `参数缺失:\n` +
                 `【.ai memo ${cfg.scopePrefix} del <ID1> <ID2> --关键词1 --关键词2】删除${cfg.isPrivate ? '个人' : '群聊'}记忆\n` +
-                `【.ai memo ${cfg.scopePrefix} list】展示${cfg.isPrivate ? '个人' : '群聊'}记忆`);
+                `【.ai memo ${cfg.scopePrefix} list】展示${cfg.isPrivate ? '个人' : '群聊'}记忆\n` +
+                `【.ai memo ${cfg.scopePrefix} tidy】整理记忆（每日限一次）`);
             return ret;
         }
     }
@@ -66,13 +73,15 @@ export function registerCmdMemory() {
             private: {
                 priv: U, args: {
                     delete: { priv: U },
-                    list: { priv: U }
+                    list: { priv: U },
+                    tidy: { priv: I }
                 }
             },
             group: {
                 priv: I, args: {
                     delete: { priv: U },
-                    list: { priv: U }
+                    list: { priv: U },
+                    tidy: { priv: I }
                 }
             },
         }
@@ -128,7 +137,7 @@ export function registerCmdMemory() {
                     `【.ai memo status (@xxx)】查看记忆状态，@为查看个人记忆状态\n` +
                     `【.ai memo [p/g] del <ID1> <ID2> --关键词1 --关键词2】删除个人/群聊记忆\n` +
                     `【.ai memo [p/g] list】展示个人/群聊记忆\n` +
-                    `【.ai memo tidy】整理记忆（仅骰主）`);
+                    `【.ai memo [p/g] tidy】整理记忆（每日限一次）`);
                 return ret;
             }
         }
