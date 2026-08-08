@@ -50,9 +50,10 @@ For debugging, investigation, and non-trivial fixes, the preferred pattern is:
 2. **Analyze & Plan** — present findings; write implementation plan with exact file paths, code changes, and impact analysis.
 3. **Independent review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. Update plan based on findings.
 4. **Implement** — dispatch `@fixer` with the full plan and precise instructions. Single responsible fixer per plan.
-5. **Verify & Commit** — run `npm run build`, commit with descriptive message.
-6. **Update codemap** — load the `codemap` skill, run change detection, dispatch fixers to update affected `codemap.md` files, run `update` to save state, commit.
-7. **Reconcile** — check all background tasks completed; reconcile any file conflicts from parallel agents.
+5. **Implementation review** — dispatch `@oracle` to review the actual diff against the plan (correctness, side effects, omissions) before commit. Mandatory for non-trivial fixes.
+6. **Verify & Commit** — run `npm run build`, commit with descriptive message.
+7. **Update codemap** — load the `codemap` skill, run change detection, dispatch fixers to update affected `codemap.md` files, run `update` to save state, commit.
+8. **Reconcile** — check all background tasks completed; reconcile any file conflicts from parallel agents.
 
 Example of this flow in practice: vector dead code cleanup → Jina EOF debugging → timezone fix. Each followed: research (subagent) → write plan → oracle review → implement (fixer) → commit + codemap update.
 
@@ -74,8 +75,9 @@ When a code review or investigation surfaces **multiple bugs/issues** (5+), do n
    b. **Write fix plan** — exact file paths, line numbers, code changes, and impact analysis
    c. **Oracle review** — dispatch `@oracle` to review the plan for bugs, omissions, side effects, and simplification opportunities. **Mandatory.** Update plan based on findings.
    d. **Implement** — dispatch `@fixer` with the reviewed plan
-   e. **Verify** — `npm run build`
-    f. **Commit + Codemap** — record commit hash in tracking document, then update codemap files (load `codemap` skill, detect changes, dispatch fixers, save state, commit).
+   e. **Implementation review** — dispatch `@oracle` to review the implementation diff against the plan before commit. **Mandatory.**
+   f. **Verify** — `npm run build`
+    g. **Commit + Codemap** — record commit hash in tracking document, then update codemap files (load `codemap` skill, detect changes, dispatch fixers, save state, commit).
 
 4. **Update tracking document** — after each commit, update the progress markers:
    - `⬜` → `🔄` when work begins
@@ -85,6 +87,7 @@ When a code review or investigation surfaces **multiple bugs/issues** (5+), do n
 5. **Version bump** — every commit that modifies `src/` bumps the patch version.
 
 6. **Do not close** the tracking document until all 🔴 and 🟠 items are resolved. 🟡 and 🔵 items may be deferred to future iterations.
+7. **Cleanup** — when the plan is fully executed (all tasks ✅ or explicitly deferred), delete or archive the tracking document (`docs/plans/`). Do not leave executed plans behind.
 
 ## SealDice API
 
@@ -120,6 +123,7 @@ src/utils/            → shared utilities
 
 - **ALL changes must go through git.** No direct file edits without committing.
 - **User reviews every change before commit.** Do not commit/push without explicit approval.
+- **Desensitize user-provided data in documents** — error logs, group names, QQ IDs, nicknames, and message content must NOT be copied verbatim into plan/spec/design docs or any artifact that may be shared/backed up. Use placeholders (`XX群`, `QQ:****`, `用户A`) instead.
 - Plugin goal: make bot dialogue feel more human / 更像真人.
 
 ## Repository Map
