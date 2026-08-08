@@ -114,7 +114,7 @@ export function registerMemory() {
                         }
                     }
                 },
-                required: ['memory_type', 'name', 'id_list', 'keywords']
+                required: ['memory_type', 'name']
             }
         }
     });
@@ -254,18 +254,12 @@ export function registerMemory() {
             description: '清除长期记忆。当前对话是群聊则清除当前群的长期记忆，当前对话是私聊则清除当前用户的长期记忆。注意：你只能清除当前场景下的记忆，不能跨场景删除其他用户的记忆。',
             parameters: {
                 type: 'object',
-                properties: {
-                    name: {
-                        type: 'string',
-                        description: '确认要清除的群聊或用户名称。群聊中填群聊名称，私聊中填用户名称。'
-                    }
-                },
-                required: ['name']
+                properties: {},
+                required: []
             }
         }
     });
-    toolClear.solve = async (ctx, _, ai, args) => {
-        const { name } = args;
+    toolClear.solve = async (ctx, _, ai, _args) => {
         let targetAi = ai;
 
         if (!ctx.isPrivate) {

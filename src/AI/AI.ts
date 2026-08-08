@@ -247,7 +247,8 @@ export class AI {
     async checkActiveTimer(ctx: seal.MsgContext) {
         // 每天 0 点清理印象
         const today = new Date().toDateString();
-        if (today !== this._lastCleanupDate) {
+        // 防御性硬化：私聊实例不消耗当天门闩；cleanupImpressions 内 isPrivate return 保留
+        if (!ctx.isPrivate && today !== this._lastCleanupDate) {
             this._lastCleanupDate = today;
             await this.memory.cleanupImpressions(ctx, this);
             this.context.cleanupStaleAliases();

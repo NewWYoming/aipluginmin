@@ -58,7 +58,7 @@ function calcBaseScore(kwScore: number, recency: number, importanceScore: number
 }
 
 export class Memory {
-    static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
+    static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'importance'];
     id: string; // 记忆ID
     text: string; // 记忆内容
     sessionInfo: SessionInfo;
@@ -70,7 +70,6 @@ export class Memory {
     weight: number; // 记忆权重，0-10
     images: Image[];
     scope: 'private' | 'group' | 'universal';
-    witnesses: string[];
     importance: 1 | 3 | 5;
 
     constructor() {
@@ -89,7 +88,6 @@ export class Memory {
         this.weight = 0;
         this.images = [];
         this.scope = 'group';
-        this.witnesses = [];
         this.importance = 3;
     }
 
@@ -106,7 +104,6 @@ export class Memory {
         m.weight = this.weight;
         m.images = [...this.images];
         m.scope = this.scope;
-        m.witnesses = [...this.witnesses];
         m.importance = this.importance;
         return m;
     }
@@ -130,7 +127,6 @@ export class Memory {
 }
 export interface UserObservation {
   rawMessages: string[];
-  msgCount: number;
   lastSpeak: number;
 }
 
@@ -260,7 +256,8 @@ export class MemoryManager {
 
         if (kws.length > 0) {
             for (const id in map) {
-                if (kws.some(kw => map[id].keywords.includes(kw))) {
+                // P4: 纯子串匹配（删除语义比 O1.1 的子串+token 更宽）；单字关键词（len<2）不可删，有意取舍
+                if (kws.some(kw => kw.length >= 2 && (map[id].keywords.some(k => k.includes(kw)) || map[id].text.includes(kw)))) {
                     delete map[id];
                 }
             }
@@ -276,7 +273,7 @@ export class MemoryManager {
 
     limitMemory() {
         const { memoryLimit } = ConfigManager.memory;
-        const limit = memoryLimit > 0 ? memoryLimit - 1 : 0; // 预留1个位置用于存储最新记忆
+        const limit = memoryLimit > 0 ? Math.max(1, memoryLimit - 1) : 0; // 预留1个位置用于存储最新记忆（=0 禁用；=1 保留最高分 1 条）
         if (this.memoryList.length <= limit) return;
         const beforeCount = this.memoryList.length;
         this.memoryList.map((m) => {
@@ -306,7 +303,7 @@ export class MemoryManager {
         method: 'score'
     }) {
         if (!this.memoryList.length) return [];
-        const { userList: ul, groupList: gl, keywords: kws, includeImages, method, hardUserFilter = false } = options;
+        const { userList: ul, keywords: kws, includeImages, method, hardUserFilter = false } = options;
         const now = Math.floor(Date.now() / 1000);
         // 关键词软合并：query + keywords 统一分词
         const qTokens = [...new Set([...tokenizeForScore(query), ...tokenizeForScore(kws.join(' '))])];
@@ -335,7 +332,7 @@ export class MemoryManager {
                 return mc;
             })
             .filter(function(m) { return m !== null; })
-            .filter(function(m: any) { return method === 'early' || method === 'late' || method === 'recent' || m._baseScore > 0.1; })
+            .filter(function(m: any) { return method === 'weight' || method === 'early' || method === 'late' || method === 'recent' || m._baseScore > 0.1; })
             .sort(function(a: any, b: any) {
                 switch (method) {
                     case 'weight': return b.weight - a.weight;
@@ -353,13 +350,17 @@ export class MemoryManager {
         const increase = role === 'user' ? 1 : 0.1;
         const decrease = role === 'user' ? 0.1 : 0;
         const now = Math.floor(Date.now() / 1000);
+        const sTokens = tokenizeForScore(s);  // M3: hoist 循环外
 
         for (const id in this.memoryMap) {
             const m = this.memoryMap[id];
-            if (m.keywords.some(kw => s.includes(kw))) {
+            // O1.1: len>=2 守卫 + 子串+token 双通道（对全部关键词）；单字关键词（len<2）永不命中；中文 3+ 字词走子串兜底
+            if (m.keywords.some(kw => kw.length >= 2 && (s.includes(kw) || sTokens.includes(kw)))) {
                 m.weight = Math.min(10, m.weight + increase);
                 m.lastMentionTime = now;
             } else {
+                // O1.2: 新记忆保护期——创建后 1 天内不衰减（时间保护与逐消息衰减错配的最小取舍，M4）
+                if (now - m.createTime < 86400) continue;
                 m.weight = Math.max(0, m.weight - decrease);
             }
         }
@@ -410,7 +411,8 @@ export class MemoryManager {
 
             const result = candidates
                 .map(function(m: any) {
-                    const llmScore = (scores[m.id] || 0) / 5;
+                    // O2: 缺分回退 _baseScore（LLM 返回序号而非 id 或漏评时不再系统性淘汰）
+                    const llmScore = scores[m.id] !== undefined ? scores[m.id] / 5 : (m._baseScore || 0);
                     const finalScore = 0.7 * llmScore + 0.3 * ((m._baseScore || 0));
                     (m as any)._finalScore = finalScore;
                     return m;
@@ -418,8 +420,10 @@ export class MemoryManager {
                 .filter(function(m: any) { return m._finalScore > 0.2; })
                 .sort(function(a: any, b: any) { return b._finalScore - a._finalScore; })
                 .slice(0, topK);
-            logger.info('LLM 精排完成: 入参' + candidates.length + '条 → 返回' + result.length + '条');
-            return result;
+            // 返空兜底：过滤后为空时回退原排序（candidates 已按 base 降序，与 catch 分支一致）
+            const finalResult = result.length > 0 ? result : candidates.slice(0, topK);
+            logger.info('LLM 精排完成: 入参' + candidates.length + '条 → 返回' + finalResult.length + '条');
+            return finalResult;
         } catch (e: any) {
             logger.error('LLM 精排失败: ' + (e?.message || e) + '，回退到 base_score');
             return candidates.slice(0, topK);
@@ -449,12 +453,13 @@ export class MemoryManager {
     /** 对候选记忆列表应用复合评分（静态方法，可被 search 复用） */
     private static scoreCandidates(candidates: Memory[], query: string, ui?: UserInfo): Memory[] {
         const now = Math.floor(Date.now() / 1000);
+        const qTokens = tokenizeForScore(query);
 
         return candidates
             .map(m => {
                 const kwScore = Math.max(
-                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(m.keywords.join(' '))),
-                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(m.text))
+                    jaccardSimilarity(qTokens, tokenizeForScore(m.keywords.join(' '))),
+                    jaccardSimilarity(qTokens, tokenizeForScore(m.text))
                 );
                 if (query.trim() && kwScore === 0) return null;
                 const daysSinceCreate = (now - m.createTime) / 86400;
@@ -511,7 +516,7 @@ export class MemoryManager {
         });
 
         const response = await client.chat(
-          [{ role: 'user', content: prompt + '\n返回 JSON: {"impression": "印象文字"}' }],
+          [{ role: 'user', content: prompt }],
           null, 'none',
         );
 

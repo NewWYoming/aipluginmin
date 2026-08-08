@@ -157,7 +157,7 @@ export class Context {
         if (role === 'user' && ctx && ctx.player) {
             const uid = ctx.player.userId;
             if (!ai.memory.observations[uid]) {
-                ai.memory.observations[uid] = { rawMessages: [], msgCount: 0, lastSpeak: 0 };
+                ai.memory.observations[uid] = { rawMessages: [], lastSpeak: 0 };
             }
             const obs = ai.memory.observations[uid];
             obs.rawMessages.push(content);
@@ -166,7 +166,6 @@ export class Context {
             while (obs.rawMessages.length > cap) {
                 obs.rawMessages.shift();
             }
-            obs.msgCount += 1;
             obs.lastSpeak = now;
 
             const maxObserved = ConfigManager.memory.maxObservedMessages || 10;
