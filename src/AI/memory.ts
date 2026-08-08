@@ -16,6 +16,46 @@ export interface searchOptions {
     method: 'weight' | 'score' | 'early' | 'late' | 'recent';
 }
 
+// ---- 共享检索打分工具（search 与 scoreCandidates 统一使用）----
+
+const HAN_RE = /[\u4e00-\u9fff]/;
+
+/** 分词：按标点/空白切分；汉字连续段额外生成 bigram；非汉字 token 原样保留 */
+function tokenizeForScore(s: string): string[] {
+    const out: string[] = [];
+    for (const seg of s.split(/[\s,，。！？、；：""'':"'\n]+/)) {
+        if (!seg) continue;
+        // 拆出汉字段与非汉字段
+        const parts = seg.split(/([\u4e00-\u9fff]+)/);
+        for (const p of parts) {
+            if (!p) continue;
+            if (HAN_RE.test(p) && !/[^\u4e00-\u9fff]/.test(p)) {
+                // 纯汉字段：生成 bigram（长度1保留单字）
+                if (p.length === 1) { out.push(p); }
+                else {
+                    for (let i = 0; i < p.length - 1; i++) out.push(p.slice(i, i + 2));
+                }
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    return out;
+}
+
+function jaccardSimilarity(a: string[], b: string[]): number {
+    const setA = new Set(a), setB = new Set(b);
+    let intersection = 0;
+    setA.forEach(x => { if (setB.has(x)) intersection++; });
+    const union = setA.size + setB.size - intersection;
+    return union === 0 ? 0 : intersection / union;
+}
+
+/** 综合打分：kwScore=关键词与正文 Jaccard 取最大；userMatch 为提交3预留，默认0 */
+function calcBaseScore(kwScore: number, recency: number, importanceScore: number, userMatch = 0): number {
+    return 0.45 * kwScore + 0.25 * recency + 0.20 * importanceScore + 0.10 * userMatch;
+}
+
 export class Memory {
     static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'witnesses', 'importance'];
     id: string; // 记忆ID
@@ -300,17 +340,6 @@ export class MemoryManager {
     }) {
         if (!this.memoryList.length) return [];
         const { userList: ul, groupList: gl, keywords: kws, includeImages, method } = options;
-
-        // Helper: Jaccard similarity
-        const jaccard = function(a: string[], b: string[]): number {
-            const setA = new Set(a), setB = new Set(b);
-            const intersection = [...setA].filter(function(x) { return setB.has(x); }).length;
-            const union = new Set([...setA, ...setB]).size;
-            return union === 0 ? 0 : intersection / union;
-        };
-        const tokenize = function(s: string): string[] {
-            return s.split(/[\s,，。！？、；：""'']+/).filter(function(t) { return t.length > 0; });
-        };
         const now = Math.floor(Date.now() / 1000);
 
         return this.memoryList
@@ -319,18 +348,22 @@ export class MemoryManager {
                 const mc = m.copy;
 
                 // Composite pre-score
-                const kwJaccard = jaccard(tokenize(query), mc.keywords);
+                const kwScore = Math.max(
+                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(mc.keywords.join(' '))),
+                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(mc.text))
+                );
+                if (method === 'score' && query.trim() && kwScore === 0) return null;
                 const daysSinceCreate = (now - mc.createTime) / 86400;
                 const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
                 const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
                 const importanceScore = importanceMap[mc.importance] || 0.5;
-                const baseScore = 0.50 * kwJaccard + 0.30 * recency + 0.20 * importanceScore;
+                const baseScore = calcBaseScore(kwScore, recency, importanceScore);
 
                 (mc as any)._baseScore = baseScore;
                 return mc;
             })
             .filter(function(m) { return m !== null; })
-            .filter(function(m: any) { return m._baseScore > 0.1; })
+            .filter(function(m: any) { return method === 'early' || method === 'late' || method === 'recent' || m._baseScore > 0.1; })
             .sort(function(a: any, b: any) {
                 switch (method) {
                     case 'weight': return b.weight - a.weight;
@@ -424,7 +457,7 @@ export class MemoryManager {
             const content = response.content || '{}';
             const scores = JSON.parse(content).scores || {};
 
-            return candidates
+            const result = candidates
                 .map(function(m: any) {
                     const llmScore = (scores[m.id] || 0) / 5;
                     const finalScore = 0.7 * llmScore + 0.3 * ((m._baseScore || 0));
@@ -434,7 +467,8 @@ export class MemoryManager {
                 .filter(function(m: any) { return m._finalScore > 0.2; })
                 .sort(function(a: any, b: any) { return b._finalScore - a._finalScore; })
                 .slice(0, topK);
-            logger.info('LLM 精排完成: 入参' + candidates.length + '条 → 返回' + Math.min(topK, candidates.length) + '条');
+            logger.info('LLM 精排完成: 入参' + candidates.length + '条 → 返回' + result.length + '条');
+            return result;
         } catch (e: any) {
             logger.error('LLM 精排失败: ' + (e?.message || e) + '，回退到 base_score');
             return candidates.slice(0, topK);
@@ -463,27 +497,24 @@ export class MemoryManager {
 
     /** 对候选记忆列表应用复合评分（静态方法，可被 search 复用） */
     private static scoreCandidates(candidates: Memory[], query: string): Memory[] {
-        const jaccard = (a: string[], b: string[]): number => {
-            const setA = new Set(a), setB = new Set(b);
-            const intersection = [...setA].filter(x => setB.has(x)).length;
-            const union = new Set([...setA, ...setB]).size;
-            return union === 0 ? 0 : intersection / union;
-        };
-        const tokenize = (s: string): string[] =>
-            s.split(/[\s,，。！？、；：""'']+/).filter(t => t.length > 0);
         const now = Math.floor(Date.now() / 1000);
 
         return candidates
             .map(m => {
-                const kwJaccard = jaccard(tokenize(query), m.keywords);
+                const kwScore = Math.max(
+                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(m.keywords.join(' '))),
+                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(m.text))
+                );
+                if (query.trim() && kwScore === 0) return null;
                 const daysSinceCreate = (now - m.createTime) / 86400;
                 const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
                 const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
-                const baseScore = 0.50 * kwJaccard + 0.30 * recency + 0.20 * (importanceMap[m.importance] || 0.5);
+                const importanceScore = importanceMap[m.importance] || 0.5;
+                const baseScore = calcBaseScore(kwScore, recency, importanceScore, 0);
                 (m as any)._baseScore = baseScore;
                 return m;
             })
-            .filter((m: any) => m._baseScore > 0.1)
+            .filter((m: any) => m !== null && m._baseScore > 0.1)
             .sort((a: any, b: any) => b._baseScore - a._baseScore)
             .slice(0, 20);
     }
