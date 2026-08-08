@@ -1,7 +1,7 @@
 import { ConfigManager } from "../config/configManager";
 import { AI, AIManager, GroupInfo, SessionInfo, UserInfo } from "./AI";
 import { Context } from "./context";
-import { generateId, getCommonGroup, getCommonKeyword, getCommonUser, revive } from "../utils/utils";
+import { generateId, getCommonUser, revive } from "../utils/utils";
 import { AIClient } from "../service/AIClient";
 import { logger } from "../logger";
 import { fmtDate } from "../utils/utils_string";
@@ -9,11 +9,12 @@ import { Image, ImageManager } from "./image";
 
 export interface searchOptions {
     topK: number;
+    keywords: string[];
     userList: UserInfo[];
     groupList: GroupInfo[];
-    keywords: string[];
     includeImages: boolean;
     method: 'weight' | 'score' | 'early' | 'late' | 'recent';
+    hardUserFilter?: boolean;   // 新增：工具路径显式点名用户时硬过滤
 }
 
 // ---- 共享检索打分工具（search 与 scoreCandidates 统一使用）----
@@ -126,45 +127,7 @@ export class Memory {
         return Math.max(ageDecay, activityDecay);
     }
 
-    /**
-     * 计算记忆与查询的相似度分数
-     * @param ul 查询用户列表
-     * @param gl 查询群组列表
-     * @param kws 查询关键词列表
-     * @returns 相似度分数（0-1）
-     */
-    calculateSimilarity(ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
-        // 总权重
-        const totalWeight = (ul.length ? 0.2 : 0) + (gl.length ? 0.2 : 0) + (kws.length ? 0.2 : 0);
-        if (totalWeight === 0) return 0;
-        // 用户相似度分数 0-1
-        const commonUser = getCommonUser(this.userList, ul);
-        const userSimilarity = (ul && ul.length > 0) ? commonUser.length / (this.userList.length + ul.length - commonUser.length) : 0;
-        // 群组相似度分数 0-1
-        const commonGroup = getCommonGroup(this.groupList, gl);
-        const groupSimilarity = (gl && gl.length > 0) ? commonGroup.length / (this.groupList.length + gl.length - commonGroup.length) : 0;
-        // 关键词匹配分数 0-1
-        const commonKeyword = getCommonKeyword(this.keywords, kws);
-        const keywordSimilarity = (kws && kws.length > 0) ? commonKeyword.length / kws.length : 0;
-        // 综合相似度分数 0-1
-        const avgSimilarity = userSimilarity * 0.2 + groupSimilarity * 0.2 + keywordSimilarity * 0.2;
-        // 相似度增强因子 0-1
-        return avgSimilarity / totalWeight;
-    }
-
-    /**
-     * 计算记忆的最终分数
-     * @param ul 查询用户列表
-     * @param gl 查询群组列表
-     * @param kws 查询关键词列表
-     * @returns 相似度分数（0-1）
-     */
-    calculateScore(ul: UserInfo[], gl: GroupInfo[], kws: string[]): number {
-        return this.weight * 0.03 + this.calculateSimilarity(ul, gl, kws) * 0.7;
-    }
-
 }
-
 export interface UserObservation {
   rawMessages: string[];
   msgCount: number;
@@ -245,11 +208,14 @@ export class MemoryManager {
             }
         }
 
+        const scope = ctx.isPrivate ? 'private' : 'group';
         for (const id of this.memoryIds) {
             const m = this.memoryMap[id];
-            if (text === m.text && m.sessionInfo.id === ai.id && getCommonUser(ul, m.userList).length > 0 && getCommonGroup(gl, m.groupList).length > 0) {
+            if (m.scope === scope && jaccardSimilarity(tokenizeForScore(text), tokenizeForScore(m.text)) >= 0.7) {
                 m.keywords = Array.from(new Set([...m.keywords, ...kws]));
-                logger.info(`记忆已存在，id:${id}，合并关键词:${m.keywords.join(',')}`);
+                m.lastMentionTime = Math.floor(Date.now() / 1000);
+                m.weight = Math.min(10, m.weight + 1);
+                logger.info(`记忆已存在(相似去重)，id:${id}，合并关键词:${m.keywords.join(',')}`);
                 return;
             }
         }
@@ -340,8 +306,10 @@ export class MemoryManager {
         method: 'score'
     }) {
         if (!this.memoryList.length) return [];
-        const { userList: ul, groupList: gl, keywords: kws, includeImages, method } = options;
+        const { userList: ul, groupList: gl, keywords: kws, includeImages, method, hardUserFilter = false } = options;
         const now = Math.floor(Date.now() / 1000);
+        // 关键词软合并：query + keywords 统一分词
+        const qTokens = [...new Set([...tokenizeForScore(query), ...tokenizeForScore(kws.join(' '))])];
 
         return this.memoryList
             .map(function(m) {
@@ -350,15 +318,18 @@ export class MemoryManager {
 
                 // Composite pre-score
                 const kwScore = Math.max(
-                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(mc.keywords.join(' '))),
-                    jaccardSimilarity(tokenizeForScore(query), tokenizeForScore(mc.text))
+                    jaccardSimilarity(qTokens, tokenizeForScore(mc.keywords.join(' '))),
+                    jaccardSimilarity(qTokens, tokenizeForScore(mc.text))
                 );
                 if (method === 'score' && query.trim() && kwScore === 0) return null;
+                // 硬过滤：显式点名用户时，无共同用户的记忆直接淘汰
+                if (hardUserFilter && ul.length > 0 && getCommonUser(ul, m.userList).length === 0) return null;
                 const daysSinceCreate = (now - mc.createTime) / 86400;
                 const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
                 const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
                 const importanceScore = importanceMap[mc.importance] || 0.5;
-                const baseScore = calcBaseScore(kwScore, recency, importanceScore);
+                const userMatch = ul.length > 0 ? (getCommonUser(ul, m.userList).length > 0 ? 1 : 0) : 0;
+                const baseScore = calcBaseScore(kwScore, recency, importanceScore, userMatch);
 
                 (mc as any)._baseScore = baseScore;
                 return mc;
@@ -403,27 +374,6 @@ export class MemoryManager {
         this.updateMemoryWeight(s, role);
         // 群内用户的记忆权重更新
         if (!ctx.isPrivate) context.userInfoList.forEach(ui => AIManager.getAI(ui.id).memory.updateMemoryWeight(s, role));
-    }
-
-    async getTopScoreMemoryList(text: string = '', ui: UserInfo = null, gi: GroupInfo = null, preFiltered?: Memory[]) {
-        const { memoryShowNumber } = ConfigManager.memory;
-        if (preFiltered) {
-            return this.scoreAndSlice(preFiltered, text, ui, gi, memoryShowNumber);
-        }
-        return await this.search(text, {
-            topK: memoryShowNumber,
-            userList: ui ? [ui] : [],
-            groupList: gi ? [gi] : [],
-            keywords: [],
-            includeImages: false,
-            method: 'score'
-        });
-    }
-
-    private scoreAndSlice(candidates: Memory[], text: string, ui: UserInfo, gi: GroupInfo, topK: number): Memory[] {
-        return candidates
-            .sort((a, b) => b.calculateScore(ui ? [ui] : [], gi ? [gi] : [], []) - a.calculateScore([], ui ? [ui] : [], gi ? [gi] : [], []))
-            .slice(0, topK);
     }
 
     /** LLM 精排候选记忆（Phase 4 — 后处理步骤） */
@@ -481,7 +431,7 @@ export class MemoryManager {
         let candidates: Memory[];
         if (preFiltered) {
             // Use pre-filtered list — apply composite scoring directly
-            candidates = MemoryManager.scoreCandidates(preFiltered, text);
+            candidates = MemoryManager.scoreCandidates(preFiltered, text, ui);
         } else {
             candidates = await this.search(text, {
                 topK: 20,
@@ -497,7 +447,7 @@ export class MemoryManager {
     }
 
     /** 对候选记忆列表应用复合评分（静态方法，可被 search 复用） */
-    private static scoreCandidates(candidates: Memory[], query: string): Memory[] {
+    private static scoreCandidates(candidates: Memory[], query: string, ui?: UserInfo): Memory[] {
         const now = Math.floor(Date.now() / 1000);
 
         return candidates
@@ -511,7 +461,8 @@ export class MemoryManager {
                 const recency = Math.exp(-Math.log(2) * daysSinceCreate / 14);
                 const importanceMap: { [key: number]: number } = { 1: 0.2, 3: 0.5, 5: 0.8 };
                 const importanceScore = importanceMap[m.importance] || 0.5;
-                const baseScore = calcBaseScore(kwScore, recency, importanceScore, 0);
+                const userMatch = ui ? (getCommonUser([ui], m.userList).length > 0 ? 1 : 0) : 0;
+                const baseScore = calcBaseScore(kwScore, recency, importanceScore, userMatch);
                 (m as any)._baseScore = baseScore;
                 return m;
             })
@@ -911,8 +862,8 @@ export class KnowledgeMemoryManager extends MemoryManager {
         const { knowledgeMemoryShowNumber } = ConfigManager.memory;
         const memoryList = await this.search(text, {
             topK: knowledgeMemoryShowNumber,
-            userList: ui ? [ui] : [],
-            groupList: gi ? [gi] : [],
+            userList: [],
+            groupList: [],
             keywords: [],
             includeImages: false,
             method: 'score'

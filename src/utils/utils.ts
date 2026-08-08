@@ -138,9 +138,3 @@ export function levenshteinDistance(a: string, b: string): number {
     }
     return dp[m][n];
 }
-
-export function getCommonKeyword(a: string[], b: string[]): string[] {
-    if (a.length === 0 || b.length === 0) return [];
-    const aid = new Set(a);
-    return b.filter(k => aid.has(k));
-}

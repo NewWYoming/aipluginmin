@@ -61,9 +61,14 @@ export function registerMemory() {
 
         // Resolve about list to UserInfo (for userList association)
         const uiList: UserInfo[] = [];
+        // R4.2/Y6: name 优先激活，about 按 id 去重
+        if (name && name.trim()) {
+            const nameUi = await ai.context.findUserInfo(ctx, name, true);
+            if (nameUi !== null) uiList.push(nameUi);
+        }
         for (const n of about) {
             const ui = await ai.context.findUserInfo(ctx, n, true);
-            if (ui !== null) uiList.push(ui);
+            if (ui !== null && !uiList.some(u => u.id === ui.id)) uiList.push(ui);
         }
         // Resolve groupList
         const giList: GroupInfo[] = [];
@@ -201,12 +206,7 @@ export function registerMemory() {
 
         // Knowledge path: not scope-restricted (admin-defined global data)
         if (target === 'knowledge') {
-            const giList: GroupInfo[] = [];
-            for (const n of groupList) {
-                const gi = await ai.context.findGroupInfo(ctx, n);
-                if (gi !== null) giList.push(gi);
-            }
-            const options: SearchOptions = { topK, keywords, userList, groupList, includeImages, method };
+            const options: SearchOptions = { topK, keywords, userList: [], groupList: [], includeImages, method };
             const { roleIndex } = getRoleSetting(ctx);
             await knowledgeMM.updateKnowledgeMemory(roleIndex);
             if (knowledgeMM.memoryIds.length === 0) return { content: `暂无知识库记忆`, images: [] };
@@ -230,17 +230,17 @@ export function registerMemory() {
         if (targetAi.memory.memoryIds.length === 0) return { content: `暂无记忆`, images: [] };
 
         const uiList: UserInfo[] = [];
+        // R4.1: name 优先激活，userList 按 id 去重
+        if (name && name.trim()) {
+            const nameUi = await ai.context.findUserInfo(ctx, name, true);
+            if (nameUi !== null) uiList.push(nameUi);
+        }
         for (const n of userList) {
             const ui = await ai.context.findUserInfo(ctx, n, true);
-            if (ui !== null) uiList.push(ui);
-        }
-        const giList: GroupInfo[] = [];
-        for (const n of groupList) {
-            const gi = await ai.context.findGroupInfo(ctx, n);
-            if (gi !== null) giList.push(gi);
+            if (ui !== null && !uiList.some(u => u.id === ui.id)) uiList.push(ui);
         }
 
-        const options: SearchOptions = { topK, keywords, userList, groupList, includeImages, method };
+        const options: SearchOptions = { topK, keywords, userList: uiList, groupList: [], includeImages, method, hardUserFilter: (userList.length > 0 || name.length > 0) };
         const memoryList = await targetAi.memory.search(query, options);
         logger.info(`LLM调用search_memory: scope=${ctx.isPrivate ? 'private' : 'group'}, query="${query}", topK=${topK}, 结果=${memoryList.length}条`);
         const images = Array.from(new Set([].concat(...memoryList.map(m => m.images))));
