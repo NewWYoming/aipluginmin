@@ -3,7 +3,7 @@ import { ConfigManager } from "../config/configManager";
 import { logger } from "../logger";
 import { getCtxAndMsg } from "../utils/utils_seal";
 import { Tool } from "./tool";
-import { knowledgeMM, searchOptions as SearchOptions } from "../AI/memory";
+import { generateMergeText, knowledgeMM, searchOptions as SearchOptions } from "../AI/memory";
 import { getRoleSetting } from "../utils/utils_message";
 
 export function registerMemory() {
@@ -144,6 +144,101 @@ export function registerMemory() {
 
         if (deleted > 0) return { content: `已删除${deleted}条记忆`, images: [] };
         return { content: `未找到匹配的记忆，请先用search_memory确认记忆ID`, images: [] };
+    }
+
+    const toolUpdate = new Tool({
+        type: 'function',
+        function: {
+            name: 'update_memory',
+            description: '按记忆ID更新既有长期记忆（整体替换语义：传入的字段即新值，不传的字段保持原样）。保留创建时间与权重，仅刷新提及时间。注意：你只能更新当前场景下的记忆，不能跨场景修改其他用户的记忆。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id_list: {
+                        type: 'array',
+                        description: '要更新的记忆ID列表（6位字母数字串，可从search_memory结果获取）',
+                        items: { type: 'string' }
+                    },
+                    text: {
+                        type: 'string',
+                        description: '新的记忆内容，整体替换旧内容（尽量简短，可用<|img:xxxxxx|>插入图片，无需附带时间与来源）。不传则保持原样。'
+                    },
+                    keywords: {
+                        type: 'array',
+                        description: '新的记忆关键词列表，整体替换旧关键词。不传则保持原样。',
+                        items: { type: 'string' }
+                    },
+                    importance: {
+                        type: 'number',
+                        enum: [1, 3, 5],
+                        description: '记忆重要性: 5=核心事实（身份、重要偏好、明确要求记住的事），3=一般信息（值得记但非关键），1=琐碎（随口一提的闲聊）。不传则保持原样。'
+                    },
+                    about: {
+                        type: 'array',
+                        description: '新的相关用户名称列表，整体替换userList（仅填当前对话中可以通过上下文找得到的用户名）。不传则保持原样。',
+                        items: { type: 'string' }
+                    }
+                },
+                required: ['id_list']
+            }
+        }
+    });
+    toolUpdate.solve = async (ctx, _, ai, args) => {
+        const { id_list = [], text, keywords, importance, about = [] } = args;
+        if (id_list.length === 0) return { content: '参数缺失：需提供 id_list', images: [] };
+
+        // M1: findUserInfo 是 async，必须 await Promise.all 并行解析
+        const uiList = (await Promise.all(about.map(n => ai.context.findUserInfo(ctx, n, true)))).filter(ui => ui !== null);
+
+        let updated = 0;
+        for (const id of id_list) {
+            const m = ai.memory.memoryMap[id];
+            if (!m) continue;
+            if (text !== undefined) m.text = text;  // 整体替换语义（用户确认）
+            if (keywords !== undefined && Array.isArray(keywords)) m.keywords = keywords;
+            if (importance !== undefined) m.importance = [1, 3, 5].includes(importance) ? importance : (importance >= 3 ? 5 : 1);  // 越界收拢到 1|3|5
+            if (uiList.length > 0) m.userList = uiList;  // about 传了才替换；查无结果不清空
+            m.lastMentionTime = Math.floor(Date.now() / 1000);  // 刷新保鲜；weight 不动
+            updated++;
+        }
+        if (updated > 0) AIManager.saveAI(ai.id);
+        return { content: updated > 0 ? `已更新 ${updated} 条记忆` : '未找到匹配的记忆，请先用 search_memory 确认记忆 ID', images: [] };
+    }
+
+    const toolMerge = new Tool({
+        type: 'function',
+        function: {
+            name: 'merge_memory',
+            description: '合并2-5条重复或高度重叠的长期记忆为一条（LLM 生成合并内容；合并失败不删除任何记忆）。注意：你只能合并当前场景下的记忆，不能跨场景操作其他用户的记忆。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id_list: {
+                        type: 'array',
+                        description: '要合并的记忆ID列表（至少2条、最多5条，6位字母数字串，可从search_memory结果获取）',
+                        items: { type: 'string' }
+                    }
+                },
+                required: ['id_list']
+            }
+        }
+    });
+    toolMerge.solve = async (ctx, _, ai, args) => {
+        const { id_list = [] } = args;
+        // M1: 先按 id 去重再取记忆——重复 id（如 [A, A, B]）会让同一对象出现多次，slice(1) 的 restIds 会含基准 id 导致合并时基准被误删
+        const memories = [...new Set(id_list)].map(id => ai.memory.memoryMap[id]).filter(m => m);
+        if (memories.length < 2) return { content: '需至少 2 条有效记忆', images: [] };
+        let truncated = false;
+        if (memories.length > 5) { memories.length = 5; truncated = true; }  // 截断防护
+
+        logger.info(`LLM调用merge_memory: AI=${ai.id}, ids=[${memories.map(m => m.id).join(',')}]`);
+        const merged = await generateMergeText(memories);
+        if (!merged) return { content: '合并失败，记忆未改动', images: [] };
+
+        const result = ai.memory.mergeMemories(memories, merged.text, merged.keywords);
+        AIManager.saveAI(ai.id);
+        logger.info(`记忆已合并: ${memories.length}条 → ${result.id}`);
+        return { content: `已合并 ${memories.length} 条记忆 → ${result.id}` + (truncated ? '（仅合并前 5 条，其余忽略）' : ''), images: [] };
     }
 
     const toolSearch = new Tool({

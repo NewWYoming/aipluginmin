@@ -4,7 +4,7 @@ import { Context } from "./context";
 import { generateId, getCommonUser, revive } from "../utils/utils";
 import { AIClient } from "../service/AIClient";
 import { logger } from "../logger";
-import { fmtDate } from "../utils/utils_string";
+import { fmtDate, fixJsonString } from "../utils/utils_string";
 import { Image, ImageManager } from "./image";
 
 export interface searchOptions {
@@ -276,6 +276,34 @@ export class MemoryManager {
             logger.warning(`未找到匹配的记忆: ids=[${ids.join(',')}], keywords=[${kws.join(',')}]`);
         }
         return deleted;
+    }
+
+    /** F2: 合并多条记忆为一条——以第一条为基准写入合并内容/关键词；userList/groupList 按 id 合并去重；createTime 取最早、lastMentionTime 取最新、weight 取最大(cap 10)；删除其余记忆并返回基准条 */
+    mergeMemories(memoryList: Memory[], newText: string, newKeywords: string[]): Memory {
+        const m = memoryList[0];
+        m.text = newText;
+        m.keywords = newKeywords;
+
+        // userList / groupList 按 id 合并去重
+        for (const other of memoryList.slice(1)) {
+            for (const u of other.userList) {
+                if (!m.userList.some(x => x.id === u.id)) m.userList.push(u);
+            }
+            for (const g of other.groupList) {
+                if (!m.groupList.some(x => x.id === g.id)) m.groupList.push(g);
+            }
+        }
+
+        // createTime 取最早、lastMentionTime 取最新、weight 取最大（cap 10）
+        m.createTime = Math.min(...memoryList.map(x => x.createTime));
+        m.lastMentionTime = Math.max(...memoryList.map(x => x.lastMentionTime));
+        m.weight = Math.min(10, Math.max(...memoryList.map(x => x.weight)));
+
+        // 删除其余记忆（deleteMemory 对空列表早退，安全）
+        const restIds = memoryList.slice(1).map(x => x.id);
+        if (restIds.length > 0) this.deleteMemory(restIds);
+
+        return m;
     }
 
     limitMemory() {
@@ -711,6 +739,55 @@ export class MemoryManager {
                 return { memory: m, image };
             }
         }
+        return null;
+    }
+}
+
+/** F2: LLM 生成多条记忆的合并文本与关键词（merge_memory 工具共享函数）。
+ * 约束：保留全部事实/不得遗漏重要信息/合并后长度不超过原文总和；无法合并时输出首条原文；空 text 或任何失败 → 返回 null（调用方不删任何记忆） */
+export async function generateMergeText(memoryList: Memory[]): Promise<{ text: string; keywords: string[] } | null> {
+    if (memoryList.length === 0) return null;
+
+    const listText = memoryList.map((m, i) => {
+        return `${i + 1}. [${m.id}] 关键词:${m.keywords.join('、') || '无'} 相关用户:${m.userList.map(u => u.name).join('、') || '无'}\n   内容: ${m.text}`;
+    }).join('\n');
+    const prompt = '合并以下多条记忆为一条记忆。要求:\n' +
+        '1. 保留全部事实，不得遗漏任何重要信息\n' +
+        '2. 合并后长度不超过原文总和\n' +
+        '3. 如果各条记忆内容不相关、无法合并，直接输出第一条记忆的原文\n\n' +
+        '记忆列表:\n' + listText + '\n\n返回 JSON: {"text": "合并后的记忆内容", "keywords": ["关键词1", "关键词2"]}';
+
+    try {
+        const requestConfig = ConfigManager.request;
+        const client = new AIClient({
+            apiProvider: requestConfig.apiProvider,
+            url: requestConfig.url,
+            apiKey: requestConfig.apiKey,
+            model: requestConfig.memoryModel,
+            maxTokens: 256,
+            timeout: 15000,
+            thinkingEnabled: false,
+            reasoningEffort: 'low',
+            toolThinkingEnabled: false,
+            toolReasoningEffort: 'minimal',
+            extraBody: {},
+        });
+
+        const response = await client.chat(
+            [{ role: 'user', content: prompt }],
+            null, 'none',
+        );
+
+        const content = response.content || '';
+        const parsed = JSON.parse(fixJsonString(content));
+        const text = (parsed?.text || '').toString().trim();
+        if (!text) return null;  // 空 text → 判失败
+        const keywords = Array.isArray(parsed.keywords)
+            ? parsed.keywords.map((k: any) => String(k).trim()).filter((k: string) => k)
+            : [];
+        return { text, keywords };
+    } catch (e: any) {
+        logger.error('LLM 合并记忆失败: ' + (e?.message || e) + '，记忆未改动');
         return null;
     }
 }
