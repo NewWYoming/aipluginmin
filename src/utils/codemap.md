@@ -27,9 +27,8 @@ Shared utility functions consumed across the plugin: ID generation, message form
 | `withTimeout` | `Promise.race` wrapper; rejects after `timeoutMs`. |
 | `revive` | Restore constructor-instantiated objects from plain JSON using `validKeys`. |
 | `aliasToCmd` | Resolve user-defined command aliases from `aliasMap`. |
-| `cosineSimilarity` | Cosine similarity for numeric vectors (used in context relevance). |
 | `levenshteinDistance` | Classic edit distance for strings. |
-| `getCommonUser` / `getCommonGroup` / `getCommonKeyword` | Set-intersection helpers for user/group/keyword lists. |
+| `getCommonUser` / `getCommonGroup` | Set-intersection helpers for user/group lists. `getCommonUser` is used by `src/AI/memory.ts` (user-list filter/scoring); `getCommonGroup` has no in-repo consumers — kept as a reserved utility. `getCommonKeyword` was removed (v5.1.30 dead-code cleanup; it was only used by the deleted `Memory.calculateSimilarity`). |
 
 ### `utils_message.ts` — AI context assembly
 
@@ -96,8 +95,8 @@ All follow the same pattern: `getNet()` → `net.callApi(epId, action, params)` 
 
 | Consumer | What it uses |
 |----------|-------------|
-| **`src/AI/`** (core chat) | `handleMessages`, `handleReply`, `buildSystemMessage`, `checkRepeat`, `transformArrayToContent`, `revive`, `withTimeout`, cosine similarity helpers |
+| **`src/AI/`** (core chat) | `handleMessages`, `handleReply`, `buildSystemMessage`, `checkRepeat`, `transformArrayToContent`, `revive`, `generateId`, `replyToSender`, `transformMsgId`, `levenshteinDistance` |
 | **`src/cmd/`** (commands) | `getCtxAndMsg`, `replyToSender`, `transformMsgId`, `createCtx`, various OB11 wrappers |
-| **`src/tool/`** (function-calling tools) | `getCommonUser`, `getCommonGroup`, `getCommonKeyword`, OB11 API wrappers (group management, member queries) |
+| **`src/tool/`** (function-calling tools) | `generateId`, `transformMsgId`/`transformMsgIdBack`, `replyToSender`, `parseSpecialTokens`, `handleReply`, `transformArrayToContent`, `fixJsonString`, `fmtDate`, `buildContent`/`getRoleSetting`, `getCtxAndMsg`/`getSessionCtxAndMsg`, OB11 API wrappers (group management, member queries) |
 | **`src/config/configManager.ts`** | Config reader — all utils files import `ConfigManager` for feature flags and settings |
 | **Plugin entry (`src/index.ts`)** | `checkUpdate` called once on startup |

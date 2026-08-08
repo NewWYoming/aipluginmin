@@ -14,7 +14,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 |---|---|---|---|
 | `tool.ts` | (framework) | Core: `Tool` class + `ToolManager` registry |
 | `sample.ts` | `sample` | Template / reference (not registered) |
-| `tool_memory.ts` | `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Memory CRUD |
+| `tool_memory.ts` | `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Memory CRUD. _Aug 8: `name` 参数激活（`add_memory`/`search_memory` 经 `findUserInfo` 解析并入 userList，按 id 去重）；`search_memory` 按 `target` 区分知识库（全局数据，userList/groupList 传空）与长期记忆（当前场景限定 + `hardUserFilter` 硬过滤）；`del_memory` 返回真实删除数（`id_list` 为 6 位 base36 字符串）_ |
 | `tool_attr.ts` | `attr_show`, `attr_get`, `attr_set` | COC 7th attributes |
 | `tool_roll_check.ts` | `roll_check`, `san_check` | COC 7th dice rolling |
 | `tool_modu.ts` | `modu_roll`, `modu_search` | COC module/story |
@@ -224,7 +224,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 |---|---|---|---|
 | **`src/AI/AI.ts`** — `AIManager`, `AI` class | Imported by tools | `ai.context`, `ai.memory`, `ai.imagePool`, `ai.id`, `ai.tool` (the `ToolManager` instance) |
 | **`src/AI/image.ts`** — `Image` class | Imported by tools | Returned in `solve` results; used for rendering, message sending |
-| **`src/AI/memory.ts`** — `knowledgeMM`, `searchOptions` | Imported by `tool_memory.ts` | Knowledge-base memory operations |
+| **`src/AI/memory.ts`** — `knowledgeMM`, `searchOptions` | Imported by `tool_memory.ts` | Knowledge-base memory operations; `searchOptions.hardUserFilter` — tool path hard-filters by user when explicitly named |
 | **`src/config/configManager.ts`** — `ConfigManager` | Imported by most tools | `ConfigManager.tool.*` (decks, bans, default-closed, maxCallCount, record paths, character), `ConfigManager.backend.*` (web URLs, render URL, TTS config, music API), `ConfigManager.message.*` (showNumber, isPrefix) |
 | **`src/utils/utils_seal.ts`** — `getCtxAndMsg` | Imported by several tools | Constructs temporary `MsgContext` for cross-session operations |
 | **`src/utils/utils_ob11.ts`** — OB11 network helpers | Imported by admin & group tools | `netExists`, `getGroupMemberInfo`, `setGroupBan`, `sendGroupSign`, `getFriendList`, etc. |

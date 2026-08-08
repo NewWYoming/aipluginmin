@@ -7,8 +7,8 @@
 This directory is the **brain of the plugin**. It manages per-session AI instances that drive the bot's conversational behavior. Responsibilities include:
 
 - **`AI.ts`** — Session-scoped AI orchestrator. Owns all sub-components (context, tools, memory, images, settings). Exposes `chat()` as the master entry point for generating a reply, guarded by `isChatting` to prevent re-entrant calls (lazy-load guard). `resetState()` clears context timer, decrements bucket, and resets tool call count before each chat. Persists session via `AIManager.saveAI()` both before and after tool-call loops (persist-on-receive pattern). Tracks `_lastCleanupDate` for daily impression/maintenance tasks. Manages a **task reminder queue** (`pendingReminders: { ctx, msg }[]`): `enqueueReminder(ctx, msg)` appends a reminder and triggers processing; `processNextReminder()` dequeues and calls `chat('任务提醒')` (exempt from bucket limits). The `chat()` finally block calls `processNextReminder()` after setting `isChatting = false`, ensuring queued reminders fire only after the current conversation finishes. The static `AIManager` handles serialization/deserialization of AI instances to/from SealDice storage, plus token usage tracking, and provides `evictAI(id)` / `evictPrivateInstances()` for cache lifecycle management.
-- **`context.ts`** — Conversation history management. Maintains the ordered message array (user + assistant + tool messages), enforces round limits, supports context-clearing flags (via `$gCLRMSGS` with role-filter variants: `clearMessages()`, `clearMessages('assistant', 'tool')`, `clearMessages('user')`), and provides cross-session user/group/image lookups. Manages `ignoreList` (UID-based blocking), `autoNameMod` (automatic name update to nickname/card), and `aliases` (UID-to-name registry capped at 10 names per UID with `cleanupStaleAliases()`). Collects **Tier 1 observations** (raw user messages) for the impression system during `addMessage()` — observations hard-capped at `maxObservedMessages * 3` entries.
-- **`memory.ts`** — Long-term memory with a **multi-tier memory system**. `Memory` is a single indexed record with text, keywords, user/group associations, weight, decay, **scope** (private/group/universal), **witnesses**, and **importance** level. `MemoryManager` manages the full collection — adding, **POV-filtered search**, **composite scoring** (Jaccard + recency + importance), **LLM re-ranking**, **impression generation/cleanup** (Tier 2), **user observations** (Tier 1), and **memory limit eviction** (via `limitMemory()` using `decay * weight` score ordering). `updateRelatedMemoryWeight()` propagates weight updates across bot, knowledge base, session, and group users. `getRelevantMemories()` supports pre-filtered lists with static `scoreCandidates()` for direct composite scoring. `KnowledgeMemoryManager` extends this for admin-defined knowledge bases. The old short-term memory system (`useShortMemory`/`shortMemoryList`/`updateShortMemory`) and embedding-based scoring (`vector`/`cosineSimilarity`) have been removed.
+- **`context.ts`** — Conversation history management. Maintains the ordered message array (user + assistant + tool messages), enforces round limits, supports context-clearing flags (via `$gCLRMSGS` with role-filter variants: `clearMessages()`, `clearMessages('assistant', 'tool')`, `clearMessages('user')`), and provides cross-session user/group/image lookups. Manages `ignoreList` (UID-based blocking), `autoNameMod` (automatic name update to nickname/card), and `aliases` (UID-to-name registry capped at 10 names per UID with `cleanupStaleAliases()`). Collects **Tier 1 observations** (raw user messages) for the impression system during `addMessage()` — observations hard-capped at `maxObservedMessages * 3` entries (oldest dropped). Triggers **Tier 2** impression updates **fire-and-forget**: snapshot batch is passed to `updateImpression()` and an `impressionInFlight` Set guards against re-entry, so the LLM call never blocks the message mainline.
+- **`memory.ts`** — Long-term memory with a **multi-tier memory system**. `Memory` is a single indexed record with text, keywords, user/group associations, weight, decay, **scope** (private/group/universal), **witnesses**, and **importance** level. `MemoryManager` manages the full collection — adding, **POV-filtered search**, **composite scoring**, **LLM re-ranking**, **impression generation/cleanup** (Tier 2), **user observations** (Tier 1), and **memory limit eviction** (via `limitMemory()` using `decay * weight` score ordering). Search & scoring share module-level utilities: `tokenizeForScore()` (punctuation/whitespace split + Chinese bigram), `jaccardSimilarity()`, and `calcBaseScore()` (four-factor: kwScore 45% + recency 25% + importance 20% + userMatch 10%). `search()` is user-list aware — soft user-match bonus, optional `hardUserFilter` (explicitly-named-user tool paths), keyword soft-merge into the unified query token set, and a P1 injection gate (method `score` + non-empty query + kwScore 0 → dropped). `addMemory()` dedupes by same scope + body Jaccard ≥ 0.7, merging keywords / refreshing `lastMentionTime` / bumping weight instead of duplicating. `reviveMemoryMap()` migrates scope-less legacy data by inferring scope from `sessionInfo.isPrivate` (data preserved, `_needsSave` set). `deleteMemory()` returns the actual deleted count. `updateRelatedMemoryWeight()` propagates weight updates across bot, knowledge base, session, and group users. `getRelevantMemories()` supports pre-filtered lists with static `scoreCandidates()` (optional `ui` param for userMatch soft bonus). `KnowledgeMemoryManager` extends this for admin-defined knowledge bases — user/group entries parsed as `name=segs[0]` with `QQ:`/`QQ-Group:` id prefixes, ID-less entries given stable `'kb'+djb2-hash` ids. The old short-term memory system (`useShortMemory`/`shortMemoryList`/`updateShortMemory`) and embedding-based scoring (`vector`/`cosineSimilarity`) have been removed.
 - **`image.ts`** — Image representation (`Image` class with URL/base64/local type detection, OCR via LLM vision (`imageToText()` with JSON prompt parsing for `text1`/`text2`/`isEmoji`), URL validation/conversion) and `ImageManager` for handling image segments arriving in chat messages (OCR, auto-steal emoji into pool), plus `extractExistingImagesToSave()` for capturing in-text image references into memory.
 - **`ImagePool.ts`** — A searchable image library combining admin-defined local images with auto-stolen chat images. Supports text-token matching with Levenshtein fallback, freshness boosting, and paginated listing.
 
@@ -19,7 +19,7 @@ This directory is the **brain of the plugin**. It manages per-session AI instanc
 | Pattern | Where | How |
 |---|---|---|
 | **Singleton + Cache + Eviction** | `AIManager` | Static `cache: { [id]: AI }` — keyed by user/group session ID. `getAI(id)` loads from storage on cache miss. `evictAI(id)` persists then removes an instance; `evictPrivateInstances()` bulk-evicts all non-group instances. |
-| **Strategy** | `Memory.search()` | Five sort methods (`weight`, `score`, `early`, `late`, `recent`) selected via `options.method`. `similarity` (vector-based) removed. |
+| **Strategy** | `Memory.search()` | Five sort methods (`weight`, `score`, `early`, `late`, `recent`) selected via `options.method`. Time-based methods (`early`/`late`/`recent`) skip the `_baseScore > 0.1` filter so old-but-relevant memories still surface. `similarity` (vector-based) removed. |
 | **Template Method** | `MemoryManager.buildMemory()` / `KnowledgeMemoryManager.buildKnowledgeMemory()` | Shared search logic, different rendering via configurable templates. |
 | **Revival (serialization)** | All classes | Custom `revive()` utility reconstructs class instances from plain JSON after `JSON.parse`. Each class declares `static validKeys` for controlled serialization. |
 | **Token Bucket** | `AI.bucket` | Rate-limits AI triggers: refills at `fillInterval`, capped at `bucketLimit`, decrements on each `chat()`. |
@@ -27,10 +27,11 @@ This directory is the **brain of the plugin**. It manages per-session AI instanc
 | **Persist-on-Receive** | `AI.chat()` | Calls `AIManager.saveAI(id)` before tool-call interaction (to persist context) and again after reply (to persist new messages). Ensures crash recovery doesn't lose recent state. |
 | **Composition** | `AI` class | Holds `Context`, `ToolManager`, `MemoryManager`, `ImageManager`, `ImagePool`, `Setting` as composable sub-objects. |
 | **Reinforcement Weighting** | `memory.ts` | Memory weights increase when their keywords appear in user messages, decay otherwise. `updateRelatedMemoryWeight()` propagates weight updates across bot, knowledge base, session, and group users. |
-| **Composite Scoring** | `MemoryManager.search()` / `scoreCandidates()` | Three-factor scoring: **Jaccard similarity** of query tokens vs memory keywords (50%), **recency** via exponential half-life decay (30%), and **importance** level mapping (20%). Candidates below 0.1 threshold are filtered. Vector embedding scoring removed. |
+| **Similarity Dedup** | `MemoryManager.addMemory()` | New memory matching an existing one in the same scope with body Jaccard (`tokenizeForScore`) ≥ 0.7 merges instead of duplicating: keywords unioned, `lastMentionTime` refreshed, `weight` +1 (cap 10). |
+| **Composite Scoring** | `MemoryManager.search()` / `scoreCandidates()` | Four-factor scoring via shared `calcBaseScore()`: **kwScore** (45%) = max(Jaccard(qTokens, memory.keywords), Jaccard(qTokens, memory.text)) where qTokens = unified tokenization of query ∪ keywords, **recency** (25%) via exponential half-life decay, **importance** (20%) level mapping, **userMatch** (10%) soft bonus from common users. Tokenized once with shared `tokenizeForScore()` (punctuation/whitespace split + Chinese bigram). Candidates below 0.1 threshold are filtered (skipped for time-based sorts). Vector embedding scoring removed. |
 | **LLM Re-ranking** | `MemoryManager.llmRerank()` | For >5 candidates, calls an LLM to score each memory's relevance (0-5) against the current query. Combines LLM score (70%) with composite base score (30%) to produce a final ranking. Falls back to base score on error. |
 | **POV Filtering** | `MemoryManager.getPOVFilteredMemories()` | Filters memories by scope + session ID. Only returns memories that match the current context (universal memories always included; `private` only matches same session; `group` only matches same group session). Used in `buildMemoryPrompt()` to prevent cross-session memory leakage. |
-| **Two-Tier Impression System** | `context.ts` + `memory.ts` | **Tier 1** (`context.addMessage`): silently collects raw user messages into `observations[uid]`. When `maxObservedMessages` threshold reached, triggers **Tier 2** (`MemoryManager.updateImpression`): LLM generates/updates a short (≤80 char) impression per user describing their personality/speech style. `cleanupImpressions()` removes stale entries for left/silent users on daily schedule. |
+| **Two-Tier Impression System** | `context.ts` + `memory.ts` | **Tier 1** (`context.addMessage`): silently collects raw user messages into `observations[uid]`. When `maxObservedMessages` threshold reached (or the impression is stale per `impressionMaxAge`), triggers **Tier 2** fire-and-forget: `updateImpression(uid, snapshot)` runs an LLM to generate/update a short (≤80 char) impression per user describing their personality/speech style. `impressionInFlight` Set prevents re-entry while a call is in-flight; on success the consumed snapshot batch is removed (messages arriving during the LLM call are kept for the next batch), on failure the oldest message is dropped. `cleanupImpressions()` removes stale entries for left/silent users on daily schedule. |
 | **Reminder Queue** | `AI.ts` | `pendingReminders: { ctx, msg }[]` — reminders are enqueued via `enqueueReminder()` and processed one-at-a-time by `processNextReminder()` after the current `chat()` finishes (called from the `finally` block). The reminder invocation (`chat('任务提醒')`) bypasses the token bucket via an explicit exemption. This ensures task reminders never interrupt active conversations. |
 
 ---
@@ -92,19 +93,24 @@ if role === 'user':
   ai.memory.observations[uid].rawMessages.push(content)
   ai.memory.observations[uid].msgCount++
   ai.memory.observations[uid].lastSpeak = now
+  (rawMessages hard-capped at maxObservedMessages * 3, oldest dropped)
        │
        ▼
-if rawMessages.length >= maxObservedMessages:
-  → trigger Tier 2
+if (needUpdate || impressionStale) && !impressionInFlight.has(uid):
+  → fire-and-forget Tier 2, non-blocking
 
 Tier 2 — LLM Impression Generation (MemoryManager.updateImpression)
        │
        ▼
-if observations[uid].rawMessages >= 3:
-  Build prompt: old impression + recent observations
+impressionInFlight.add(uid); batch = obs.rawMessages.slice()  (snapshot)
+updateImpression(uid, batch) → if msgs.length >= 3:
+  Build prompt: old impression + recent observations (snapshot batch)
   Call LLM → parse JSON { impression }
   Store: impressions[uid] = { text, updatedAt }
-  Clear rawMessages buffer
+  Return success/failure
+  ├─ success → obs.rawMessages.splice(0, batch.length)  (new msgs kept for next batch)
+  └─ failure → obs.rawMessages.shift()  (drop oldest, retry remainder next time)
+finally: impressionInFlight.delete(uid)
 ```
 
 ### Daily Impression Cleanup
@@ -130,17 +136,21 @@ if today !== _lastCleanupDate:
 MemoryManager.getRelevantMemories(query, userInfo, groupInfo, topK, preFiltered?)
   │
   ├─ Option A: preFiltered provided
-  │     └─ MemoryManager.scoreCandidates(preFiltered, query)
-  │         (composite scoring directly on pre-filtered list)
+  │     └─ MemoryManager.scoreCandidates(preFiltered, query, ui)
+  │         (composite scoring directly on pre-filtered list; ui enables userMatch soft bonus)
   │
   ├─ Option B: no preFiltered
   │     └─ MemoryManager.search(query, options)
-  │         ├─ Composite scoring per memory:
-  │         │     ├─ kwJaccard = Jaccard(query_tokens, memory.keywords)
+  │         ├─ Tokenize once: qTokens = query ∪ keywords (unified tokenizeForScore)
+  │         ├─ Composite scoring per memory (shared calcBaseScore):
+  │         │     ├─ kwScore = max(Jaccard(qTokens, memory.keywords), Jaccard(qTokens, memory.text))
   │         │     ├─ recency = exp(-ln2 * daysSinceCreate / 14)
   │         │     ├─ importanceScore = {1:0.2, 3:0.5, 5:0.8}
-  │         │     └─ baseScore = 0.50*kwJaccard + 0.30*recency + 0.20*importanceScore
-  │         ├─ Filter: baseScore > 0.1
+  │         │     ├─ userMatch = 1 if common user with userList else 0 (soft bonus)
+  │         │     └─ baseScore = 0.45*kwScore + 0.25*recency + 0.20*importanceScore + 0.10*userMatch
+  │         ├─ P1 injection gate: method='score' && query non-empty && kwScore===0 → drop (no word overlap = don't inject)
+  │         ├─ hardUserFilter: no common user with userList → drop (explicitly-named-user tool paths)
+  │         ├─ Filter: baseScore > 0.1 (skipped for time methods early/late/recent)
   │         ├─ Sort by selected strategy (score/weight/early/late/recent)
   │         └─ Return top 20 candidates
   │
