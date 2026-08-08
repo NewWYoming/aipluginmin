@@ -527,17 +527,19 @@ export class MemoryManager {
         });
     }
 
-    /** 为指定用户更新印象（Tier 2） */
-    async updateImpression(uid: string): Promise<boolean> {
+    /** 为指定用户更新印象（Tier 2）；rawMessages 可传调用方快照，异步期间新消息不受影响 */
+    async updateImpression(uid: string, rawMessages?: string[]): Promise<boolean> {
       const obs = this.observations[uid];
-      if (!obs || obs.rawMessages.length < 3) return;
+      if (!obs) return false;
+      const msgs = rawMessages || obs.rawMessages;
+      if (msgs.length < 3) return false;
 
       const current = this.impressions[uid];
       const oldImpression = current?.text || '无';
       const now = Math.floor(Date.now() / 1000);
 
       const prompt = '你正在根据最近的观察，更新对某个群友的简短印象。\n当前印象: ' + oldImpression + '\n最近观察:\n' +
-        obs.rawMessages.map(function(m, i) { return (i + 1) + '. ' + m; }).join('\n') +
+        msgs.map(function(m, i) { return (i + 1) + '. ' + m; }).join('\n') +
         '\n\n请用 ≤80 字更新印象。只描述性格特点、说话风格、行为习惯。不要描述具体事件。如果初次观察，给出初次印象。\n返回 JSON: {"impression": "印象文字"}';
 
       try {

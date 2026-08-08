@@ -32,6 +32,8 @@ export class Context {
     ignoreList: string[];
     autoNameMod: number; // 自动修改上下文里的名字，0:不自动修改，1:修改为昵称，2:修改为群名片
     aliases: { [uid: string]: { names: string[]; lastUsed: { [name: string]: number } } };
+    /** P3: 印象更新 in-flight 集合，防止 fire-and-forget 期间重复触发（运行时字段，不参与持久化） */
+    private impressionInFlight = new Set<string>();
 
     lastReply: string;
     counter: number;
@@ -191,13 +193,23 @@ export class Context {
             const imp = ai.memory.impressions[uid];
             const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
 
-            if (needUpdate || (staleImpression && obs.rawMessages.length > 0)) {
-                const success = await ai.memory.updateImpression(uid);
-                if (success) {
-                    obs.rawMessages = [];
-                } else {
+            if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid)) {
+                // P3: fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）
+                this.impressionInFlight.add(uid);
+                const batch = obs.rawMessages.slice();
+                ai.memory.updateImpression(uid, batch).then((success) => {
+                    this.impressionInFlight.delete(uid);
+                    if (success) {
+                        // 只移除本次已消费的批次，异步期间新增的消息保留
+                        obs.rawMessages.splice(0, batch.length);
+                    } else {
+                        // 失败：丢弃最旧一条，其余并入下一批重试
+                        obs.rawMessages.shift();
+                    }
+                }).catch(() => {
+                    this.impressionInFlight.delete(uid);
                     obs.rawMessages.shift();
-                }
+                });
             }
         }
 
