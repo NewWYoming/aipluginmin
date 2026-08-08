@@ -14,7 +14,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 |---|---|---|---|
 | `tool.ts` | (framework) | Core: `Tool` class + `ToolManager` registry |
 | `sample.ts` | `sample` | Template / reference (not registered) |
-| `tool_memory.ts` | `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Memory CRUD. _Aug 8: `name` 参数激活（`add_memory`/`search_memory` 经 `findUserInfo` 解析并入 userList，按 id 去重）；`search_memory` 按 `target` 区分知识库（全局数据，userList/groupList 传空）与长期记忆（当前场景限定 + `hardUserFilter` 硬过滤）；`del_memory` 返回真实删除数（`id_list` 为 6 位 base36 字符串）_ _Aug 9: `del_memory` 必填弱化为 `['memory_type', 'name']`（`id_list`/`keywords` 可选）；`clear_memory` 移除 `name` 参数（`properties: {}`、`required: []`，无参工具，solve 签名改 `(ctx, _, ai, _args)`）_ |
+| `tool_memory.ts` | `add_memory`, `del_memory`, `update_memory`, `merge_memory`, `search_memory`, `clear_memory` | Memory CRUD. _Aug 8: `name` 参数激活（`add_memory`/`search_memory` 经 `findUserInfo` 解析并入 userList，按 id 去重）；`search_memory` 按 `target` 区分知识库（全局数据，userList/groupList 传空）与长期记忆（当前场景限定 + `hardUserFilter` 硬过滤）；`del_memory` 返回真实删除数（`id_list` 为 6 位 base36 字符串）_ _Aug 9: `del_memory` 必填弱化为 `['memory_type', 'name']`（`id_list`/`keywords` 可选）；`clear_memory` 移除 `name` 参数（`properties: {}`、`required: []`，无参工具，solve 签名改 `(ctx, _, ai, _args)`）；新增 `update_memory`（id_list 必填，text/keywords/importance(1\|3\|5)/about 可选，整体替换语义，保留 createTime/weight 仅刷新 lastMentionTime，about 经 `Promise.all` 并行 `findUserInfo`，无 name 参数仅限当前会话 AI）与 `merge_memory`（id_list ≥2 必填，Set 去重、>5 截断附注，`generateMergeText` 失败不删任何条，成功 `mergeMemories`+saveAI）_ |
 | `tool_attr.ts` | `attr_show`, `attr_get`, `attr_set` | COC 7th attributes |
 | `tool_roll_check.ts` | `roll_check`, `san_check` | COC 7th dice rolling |
 | `tool_modu.ts` | `modu_roll`, `modu_search` | COC module/story |
@@ -39,7 +39,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_trigger.ts` | `set_trigger_condition` | Proactive trigger conditions |
 | `tool_run_command.ts` | `run_command` | Universal command invocation — AI calls any command from configured SealDice extensions (whitelist + blacklist gated) |
 
-Total: **~47 tools** across **24 files** (22 active tool files + tool.ts + sample.ts). `tool_record.ts` removed, `tool_image.ts` deprecated (file kept, registration commented out).
+Total: **~49 tools** across **24 files** (22 active tool files + tool.ts + sample.ts). `tool_record.ts` removed, `tool_image.ts` deprecated (file kept, registration commented out).
 
 ---
 
@@ -225,7 +225,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **`src/AI/AI.ts`** — `AIManager`, `AI` class | Imported by tools | `ai.context`, `ai.memory`, `ai.imagePool`, `ai.id`, `ai.tool` (the `ToolManager` instance) |
 | **`src/AI/context.ts`** — `context.registerAlias(uid, name)` | Imported by `tool_alias.ts`, `tool_rename.ts` | Canonical alias registration: normalized dedup (`normalizeName`), refreshes `lastUsed` on equivalent duplicate, 10-entry cap evicting oldest |
 | **`src/AI/image.ts`** — `Image` class | Imported by tools | Returned in `solve` results; used for rendering, message sending |
-| **`src/AI/memory.ts`** — `knowledgeMM`, `searchOptions` | Imported by `tool_memory.ts` | Knowledge-base memory operations; `searchOptions.hardUserFilter` — tool path hard-filters by user when explicitly named |
+| **`src/AI/memory.ts`** — `knowledgeMM`, `searchOptions`, `generateMergeText` | Imported by `tool_memory.ts` | Knowledge-base memory operations; `searchOptions.hardUserFilter` — tool path hard-filters by user when explicitly named; `generateMergeText` — LLM 合并文本生成（`merge_memory` 工具），失败返回 null 不删任何条；`mergeMemories`/`tidyMemories` — MemoryManager 方法（合并与每日整理，后者由 `.ai memo tidy` 命令与 AI 每日清理路径调用） |
 | **`src/config/configManager.ts`** — `ConfigManager` | Imported by most tools | `ConfigManager.tool.*` (decks, bans, default-closed, maxCallCount, record paths, character), `ConfigManager.backend.*` (web URLs, render URL, TTS config, music API), `ConfigManager.message.*` (showNumber, isPrefix) |
 | **`src/utils/utils_seal.ts`** — `getCtxAndMsg` | Imported by several tools | Constructs temporary `MsgContext` for cross-session operations |
 | **`src/utils/utils_ob11.ts`** — OB11 network helpers | Imported by admin & group tools | `netExists`, `getGroupMemberInfo`, `setGroupBan`, `sendGroupSign`, `getFriendList`, etc. |
@@ -244,7 +244,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 
 | Category | Tools | Dependency |
 |---|---|---|---|
-| **Standalone** (no ext/network) | `get_time`, `list_decks`/`draw_deck`, `search_memory`, `add_memory`, `del_memory`, `clear_memory`, `get_context`, `edit_alias`, `create_task`, `list_tasks`, `update_task`, `delete_task` | AI instance only |
+| **Standalone** (no ext/network) | `get_time`, `list_decks`/`draw_deck`, `search_memory`, `add_memory`, `update_memory`, `merge_memory`, `del_memory`, `clear_memory`, `get_context`, `edit_alias`, `create_task`, `list_tasks`, `update_task`, `delete_task` | AI instance only |
 | **Extension-delegated** (via `extensionSolve`) | `attr_show`, `attr_get`, `attr_set`, `jrrp`, `roll_check`, `san_check`, `modu_roll`, `modu_search`, `run_command` | SealDice extension commands (run_command is a meta-dispatcher gated by `allowedExtensions` + `commandBlacklist`) |
 | **OB11 network** (group admin) | `ban`, `whole_ban`, `get_ban_list`, `rename`, `group_sign`, `get_person_info`, `get_list`, `get_group_member_list`, `search_chat`, `search_common_group`, `get_msg`, `delete_msg`, `send_forward_msg`, `set_essence_msg`, `get_essence_msg_list`, `delete_essence_msg` | `utils_ob11.ts` |
 | **External HTTP** | `web_search`, `web_read`, `music_play`, `render_markdown`, `render_html`, `text_to_sound` (API mode) | Backend services (Jina API / SearXNG / render / music API / DashScope TTS) |

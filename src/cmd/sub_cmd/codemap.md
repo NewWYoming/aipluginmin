@@ -23,7 +23,7 @@ The subcommand system acts as a CLI router: the parent `cmd/root.ts` `registerCm
 | **standby** | `standby.ts` | I | Enable standby mode — AI records conversation passively without replying. |
 | **status** | `status.ts` | U | Display current AI state: privilege level, context rounds, trigger mode statuses, active time window, standby mode. |
 | **forget** | `forget.ts` | I (root) | Clear conversation context. Sub-options: `assistant` (clear AI/tool messages), `user` (clear user messages), default clears all (only full clear resets AI state; targeted clears leave state intact). |
-| **memory** | `memory.ts` | U (root) | Manage long-term (`private`/`group`) and short-term memory. CRUD operations: set/delete/list/clear. Also supports persona settings and `sum` (force summarization into short-term memory). |
+| **memory** | `memory.ts` | U (root) | Manage long-term (`private`/`group`) memory: `status (@xxx)` (view state), `[p/g] del <ID...> --关键词` (delete), `[p/g] list` (list), `[p/g] tidy` (consolidate — daily limit once, priv I). _Aug 9: 命令面收敛——移除 persona 设定(`st`) 与 `clr` 命令（`MemoryManager.persona` 字段/模板"设定"行同步删除）；`handleMemoryScope` 转 async 并新增 `tidy` 分支（`tidyMemories(true)` + saveAI + 回复 完成/失败/今日已整理）_ |
 | **image** | `image.ts` | U (root) | Image pool operations: list stolen/local images, clear stolen pool, image-to-text (`itt`), find image by ID. |
 | **impression** | `impression.ts` | U (root) | View user impressions. Default: show own impression in current session (`U`). Target: `@user` or `QQ号` (accepts `QQ:12345` or pure digits via `parseQQFromArg()`) — show that user's impression (`U`). `all @user` / `all QQ号`: cross-group scan all cached AIs for that user's impressions, sorted by recency (`M`). Uses `AIManager.cache` for cross-group lookup. `resolveTargetUid()` unifies @ and QQ号 resolution. |
 | **ctxn** | `ctxn.ts` | U (root) | Context name management: view names, set to nickname/card, enable auto-name-modification (0/1/2). Persists AI state via `AIManager.saveAI()` on `set` and `mod`. Solve is async. |
@@ -66,6 +66,10 @@ Also fixed ISO key formatting (proper `padStart` zero-padding) and simplified so
 ### memory.ts — Extracted `handleMemoryScope()` (~70 lines removed)
 
 The `handleMemoryScope()` function with a `MemoryScopeConfig` interface replaces ~70 lines of duplicated private/group branch code (219 → 189 lines). Also fixed reply text indentation in 4 places (converted multi-line template literals to `\n` concatenation).
+
+### memory.ts — 命令面收敛 (v5.1.34) + tidy 每日整理 (v5.1.36)
+
+`.ai memo` 命令面大幅收敛：移除 persona 设定（`st`/`set`）与 `clr` 清除命令，priv 树只剩 `private{delete,list}` 与 `group{delete,list}`（v5.1.36 后两者均加 `tidy: { priv: I }`）；`MemoryManager.persona` 字段、`buildMemory` 模板"设定"行及 `config_memory.ts` 模板同步删除（~61 行）。`handleMemoryScope()` 转 `async`，新增 `tidy` 分支：`await ai.memory.tidyMemories(true)`（force 全权整理，跳过数量门槛），成功即 `AIManager.saveAI()`，回复 完成/失败/今日已整理。help 更新为 `【.ai memo [p/g] tidy】整理记忆（每日限一次）`。
 
 ### status.ts — Indentation fix
 
