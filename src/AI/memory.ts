@@ -244,19 +244,27 @@ export class MemoryManager {
         logger.info(`新记忆已创建: id=${id}, scope=${m.scope}, 重要性=${importance}, 关键词=[${kws.join(',')}], 文本=${text.slice(0, 50)}`);
     }
 
-    deleteMemory(ids: string[] = [], kws: string[] = []) {
-        if (ids.length === 0 && kws.length === 0) return;
+    deleteMemory(ids: string[] = [], kws: string[] = []): number {
+        if (ids.length === 0 && kws.length === 0) return 0;
+        const map = this.memoryMap || {};
+        const before = Object.keys(map).length;
 
-        ids.forEach(id => delete this.memoryMap?.[id])
+        ids.forEach(id => delete map[String(id)]);
 
         if (kws.length > 0) {
-            for (const id in this.memoryMap) {
-                if (kws.some(kw => this.memoryMap[id].keywords.includes(kw))) {
-                    delete this.memoryMap[id];
+            for (const id in map) {
+                if (kws.some(kw => map[id].keywords.includes(kw))) {
+                    delete map[id];
                 }
             }
         }
-        logger.info(`记忆已删除: ids=[${ids.join(',')}], keywords=[${kws.join(',')}]`);
+        const deleted = before - Object.keys(map).length;
+        if (deleted > 0) {
+            logger.info(`记忆已删除: ${deleted}条, ids=[${ids.join(',')}], keywords=[${kws.join(',')}]`);
+        } else {
+            logger.warning(`未找到匹配的记忆: ids=[${ids.join(',')}], keywords=[${kws.join(',')}]`);
+        }
+        return deleted;
     }
 
     limitMemory() {

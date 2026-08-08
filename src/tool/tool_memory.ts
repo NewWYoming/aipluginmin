@@ -1,5 +1,6 @@
 import { AIManager, GroupInfo, SessionInfo, UserInfo } from "../AI/AI";
 import { ConfigManager } from "../config/configManager";
+import { logger } from "../logger";
 import { getCtxAndMsg } from "../utils/utils_seal";
 import { Tool } from "./tool";
 import { knowledgeMM, searchOptions as SearchOptions } from "../AI/memory";
@@ -95,9 +96,9 @@ export function registerMemory() {
                     },
                     id_list: {
                         type: 'array',
-                        description: '记忆ID列表，可为空',
+                        description: '记忆ID列表（6位字母数字串，可从search_memory结果获取），可为空',
                         items: {
-                            type: 'integer'
+                            type: 'string'
                         }
                     },
                     keywords: {
@@ -132,11 +133,12 @@ export function registerMemory() {
         }
 
         //记忆相关处理
-        ai.memory.deleteMemory(id_list, keywords);
-        logger.info(`LLM调用del_memory: AI=${ai.id}, ids=[${id_list.join(',')}], keywords=[${keywords.join(',')}]`);
+        const deleted = ai.memory.deleteMemory(id_list, keywords);
+        logger.info(`LLM调用del_memory: AI=${ai.id}, ids=[${(id_list || []).join(',')}], keywords=[${(keywords || []).join(',')}], deleted=${deleted}`);
         AIManager.saveAI(ai.id);
 
-        return { content: `删除记忆成功`, images: [] };
+        if (deleted > 0) return { content: `已删除${deleted}条记忆`, images: [] };
+        return { content: `未找到匹配的记忆，请先用search_memory确认记忆ID`, images: [] };
     }
 
     const toolSearch = new Tool({
