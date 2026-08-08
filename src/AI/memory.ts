@@ -145,14 +145,12 @@ export interface Impression {
 }
 
 export class MemoryManager {
-    static validKeys: (keyof MemoryManager)[] = ['persona', 'memoryMap', 'impressions', 'observations'];
-    persona: string;
+    static validKeys: (keyof MemoryManager)[] = ['memoryMap', 'impressions', 'observations'];
     memoryMap: { [id: string]: Memory };
     impressions: { [userId: string]: Impression };
     observations: { [userId: string]: UserObservation };
 
     constructor() {
-        this.persona = '无';
         this.memoryMap = {};
         this.impressions = {};
         this.observations = {};
@@ -620,7 +618,7 @@ export class MemoryManager {
     }
 
     buildMemory(si: SessionInfo, ml: Memory[]): string {
-        if (this.persona === '无' && ml.length === 0) return '';
+        if (ml.length === 0) return '';
         const { showNumber } = ConfigManager.message;
         const { memoryShowTemplate, memorySingleShowTemplate } = ConfigManager.memory;
 
@@ -654,7 +652,6 @@ export class MemoryManager {
             "用户号码": si.id.replace(/^.+:/, ''),
             "群聊名称": si.name,
             "群聊号码": si.id.replace(/^.+:/, ''),
-            "设定": this.persona,
             "记忆列表": memoryContent
         }) + '\n';
     }
