@@ -6,7 +6,7 @@ import { levenshteinDistance } from "../utils/utils_string";
 import { AI, AIManager, GroupInfo, UserInfo } from "./AI";
 import { logger } from "../logger";
 import { netExists, getFriendList, getGroupList, getGroupMemberInfo, getGroupMemberList, getStrangerInfo } from "../utils/utils_ob11";
-import { revive } from "../utils/utils";
+import { normalizeName, revive } from "../utils/utils";
 
 export interface MessageInfo {
     msgId: string;
@@ -123,25 +123,9 @@ export class Context {
         const name = role == 'user' ? ctx.player.name : seal.formatTmpl(ctx, "核心:骰子名字");
         const length = messages.length;
 
-        // 注册用户别名（UID → 所有名称变体）
+        // 注册用户别名（UID → 所有名称变体，归一化去重）
         if (role === 'user' && uid) {
-            if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
-            const names = this.aliases[uid].names;
-            if (!names.includes(name)) {
-                names.push(name);
-            }
-            this.aliases[uid].lastUsed[name] = now;
-            // 上限 10 条，超出删最旧
-            while (names.length > 10) {
-                let oldest = names[0];
-                let oldestTime = this.aliases[uid].lastUsed[oldest] || 0;
-                for (const n of names) {
-                    const t = this.aliases[uid].lastUsed[n] || 0;
-                    if (t < oldestTime) { oldest = n; oldestTime = t; }
-                }
-                names.splice(names.indexOf(oldest), 1);
-                delete this.aliases[uid].lastUsed[oldest];
-            }
+            this.registerAlias(uid, name);
         }
 
         if (length !== 0 && messages[length - 1].uid === uid && !/<[\|│｜]?function(?:_call)?>/.test(content)) {
@@ -289,32 +273,109 @@ export class Context {
         }
     }
 
+    /** 注册用户别名（归一化去重：全半角/大小写变体不重复入表） */
+    registerAlias(uid: string, name: string) {
+        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
+        const alias = this.aliases[uid];
+        const now = Math.floor(Date.now() / 1000);
+        const existing = alias.names.find(n => normalizeName(n) === normalizeName(name));
+        if (existing) {
+            alias.lastUsed[existing] = now;  // 归一化等价：更新既有名，不推新名
+            return;
+        }
+        alias.names.push(name);
+        alias.lastUsed[name] = now;
+        // 上限 10 条，超出删最旧（保留现有淘汰逻辑）
+        while (alias.names.length > 10) {
+            let oldest = alias.names[0];
+            let oldestTime = alias.lastUsed[oldest] || 0;
+            for (const n of alias.names) {
+                const t = alias.lastUsed[n] || 0;
+                if (t < oldestTime) { oldest = n; oldestTime = t; }
+            }
+            alias.names.splice(alias.names.indexOf(oldest), 1);
+            delete alias.lastUsed[oldest];
+        }
+    }
+
     async findUserInfo(ctx: seal.MsgContext, name: string | number, findInFriendList: boolean = false): Promise<UserInfo> {
-        name = String(name);
+        name = String(name).trim();
         if (!name) return null;
 
-        if (name.length > 4 && !isNaN(parseInt(name))) {
+        // 剥括号（<名字> 或 名字(123)），提前到纯数字分支之前
+        const match = name.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
+        if (match) name = match[1] || match[2];
+        const nn = normalizeName(name);
+        if (!nn) {
+            // 纯 emoji/符号昵称：归一化后为空串，走原始精确匹配兜底（不做模糊匹配，防空串互相全等误配）
+            const rawNow = Math.floor(Date.now() / 1000);
+            for (const aid of Object.keys(this.aliases)) {
+                const alias = this.aliases[aid];
+                if (alias.names.includes(name)) {
+                    alias.lastUsed[name] = rawNow;
+                    if (this.ignoreList.includes(aid)) return null;
+                    return { isPrivate: true, id: aid, name };
+                }
+            }
+            if (name === ctx.player.name) {
+                const uid = ctx.player.userId;
+                if (this.ignoreList.includes(uid)) return null;
+                return { isPrivate: true, id: uid, name };
+            }
+            const botName = seal.formatTmpl(ctx, "核心:骰子名字");
+            if (name === botName) return { isPrivate: true, id: ctx.endPoint.userId, name: botName };
+            const msgs = this.messages;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                if (name === msgs[i].name) {
+                    const uid = msgs[i].uid;
+                    if (this.ignoreList.includes(uid)) return null;
+                    return { isPrivate: true, id: uid, name: msgs[i].name };
+                }
+            }
+            // 群成员/好友原始精确匹配（网络路径）
+            if (netExists()) {
+                const epId = ctx.endPoint.userId;
+                const gid = ctx.group.groupId;
+                if (!ctx.isPrivate) {
+                    const groupMemberList = await getGroupMemberList(epId, gid.replace(/^.+:/, ''));
+                    if (groupMemberList && Array.isArray(groupMemberList)) {
+                        const matchedMember = groupMemberList.find(item => item.card === name || item.nickname === name);
+                        const user_id = matchedMember?.user_id;
+                        if (user_id) {
+                            const uid = `QQ:${user_id}`;
+                            this.registerAlias(uid, matchedMember.nickname);
+                            if (matchedMember.card) this.registerAlias(uid, matchedMember.card);
+                            if (this.ignoreList.includes(uid)) return null;
+                            return { isPrivate: true, id: uid, name };
+                        }
+                    }
+                }
+            }
+            logger.warning(`未找到用户<${name}>（归一化后为空）`);
+            return null;
+        }
+
+        // 纯数字 QQ 分支（用原始 name，防全角数字误判；\d 不含全角天然排除）
+        if (name.length >= 5 && name.length <= 11 && /^\d+$/.test(name)) {
             const uid = `QQ:${name}`;
             if (this.ignoreList.includes(uid)) return null;
             ({ ctx } = getCtxAndMsg(ctx.endPoint.userId, uid, ''));
             return { isPrivate: true, id: uid, name: ctx.player.name || '未知用户' };
         }
 
-        const match = name.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
-        if (match) name = match[1] || match[2];
-
         // 优先查别名表（UID 主键，跨群跨名有效）
         const aliasNow = Math.floor(Date.now() / 1000);
         for (const aid of Object.keys(this.aliases)) {
             const alias = this.aliases[aid];
-            if (alias.names.includes(name)) {
-                alias.lastUsed[name] = aliasNow;
+            const matched = alias.names.find(n => normalizeName(n) === nn);
+            if (matched) {
+                alias.lastUsed[matched] = aliasNow;
                 if (this.ignoreList.includes(aid)) return null;
-                return { isPrivate: true, id: aid, name };
+                return { isPrivate: true, id: aid, name: matched };
             }
-            if (name.length > 4) {
+            if (nn.length > 4) {
                 for (const n of alias.names) {
-                    if (levenshteinDistance(name, n) <= 2) {
+                    if (levenshteinDistance(nn, normalizeName(n)) <= 2) {
                         alias.lastUsed[n] = aliasNow;
                         if (this.ignoreList.includes(aid)) return null;
                         return { isPrivate: true, id: aid, name: n };
@@ -323,28 +384,29 @@ export class Context {
             }
         }
 
-        if (name === ctx.player.name) {
+        if (nn === normalizeName(ctx.player.name)) {
             const uid = ctx.player.userId;
             if (this.ignoreList.includes(uid)) return null;
-            return { isPrivate: true, id: uid, name };
+            return { isPrivate: true, id: uid, name: ctx.player.name };
         }
 
-        if (name === seal.formatTmpl(ctx, "核心:骰子名字")) return { isPrivate: true, id: ctx.endPoint.userId, name: seal.formatTmpl(ctx, "核心:骰子名字") };
+        const botName = seal.formatTmpl(ctx, "核心:骰子名字");
+        if (nn === normalizeName(botName)) return { isPrivate: true, id: ctx.endPoint.userId, name: botName };
 
         // 在上下文中查找用户
         const messages = this.messages;
         for (let i = messages.length - 1; i >= 0; i--) {
-            if (name === messages[i].name) {
+            if (nn === normalizeName(messages[i].name)) {
                 const uid = messages[i].uid;
                 if (this.ignoreList.includes(uid)) return null;
-                return { isPrivate: true, id: uid, name };
+                return { isPrivate: true, id: uid, name: messages[i].name };
             }
-            if (name.length > 4) {
-                const distance = levenshteinDistance(name, messages[i].name);
+            if (nn.length > 4) {
+                const distance = levenshteinDistance(nn, normalizeName(messages[i].name));
                 if (distance <= 2) {
                     const uid = messages[i].uid;
                     if (this.ignoreList.includes(uid)) return null;
-                    return { isPrivate: true, id: uid, name };
+                    return { isPrivate: true, id: uid, name: messages[i].name };
                 }
             }
         }
@@ -357,15 +419,15 @@ export class Context {
             if (!ctx.isPrivate) {
                 const groupMemberList = await getGroupMemberList(epId, gid.replace(/^.+:/, ''));
                 if (groupMemberList && Array.isArray(groupMemberList)) {
-                    const matchedMember = groupMemberList.find(item => item.card === name || item.nickname === name);
+                    const matchedMember = groupMemberList.find(item => normalizeName(item.card) === nn || normalizeName(item.nickname) === nn);
                     const user_id = matchedMember?.user_id;
                     if (user_id) {
                         const uid = `QQ:${user_id}`;
-                        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
-                        if (!this.aliases[uid].names.includes(matchedMember.nickname)) this.aliases[uid].names.push(matchedMember.nickname);
-                        if (matchedMember.card && !this.aliases[uid].names.includes(matchedMember.card)) this.aliases[uid].names.push(matchedMember.card);
+                        const matchedName = normalizeName(matchedMember.card) === nn ? matchedMember.card : matchedMember.nickname;
+                        this.registerAlias(uid, matchedMember.nickname);
+                        if (matchedMember.card) this.registerAlias(uid, matchedMember.card);
                         if (this.ignoreList.includes(uid)) return null;
-                        return { isPrivate: true, id: uid, name };
+                        return { isPrivate: true, id: uid, name: matchedName };
                     }
                 }
             }
@@ -373,22 +435,22 @@ export class Context {
             if (findInFriendList) {
                 const friendList = await getFriendList(epId);
                 if (friendList && Array.isArray(friendList)) {
-                    const matchedFriend = friendList.find(item => item.nickname === name || item.remark === name);
+                    const matchedFriend = friendList.find(item => normalizeName(item.nickname) === nn || normalizeName(item.remark) === nn);
                     const user_id = matchedFriend?.user_id;
                     if (user_id) {
                         const uid = `QQ:${user_id}`;
-                        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
-                        if (!this.aliases[uid].names.includes(matchedFriend.nickname)) this.aliases[uid].names.push(matchedFriend.nickname);
-                        if (matchedFriend.remark && !this.aliases[uid].names.includes(matchedFriend.remark)) this.aliases[uid].names.push(matchedFriend.remark);
+                        const matchedName = normalizeName(matchedFriend.nickname) === nn ? matchedFriend.nickname : matchedFriend.remark;
+                        this.registerAlias(uid, matchedFriend.nickname);
+                        if (matchedFriend.remark) this.registerAlias(uid, matchedFriend.remark);
                         if (this.ignoreList.includes(uid)) return null;
-                        return { isPrivate: true, id: uid, name };
+                        return { isPrivate: true, id: uid, name: matchedName };
                     }
                 }
             }
         }
 
-        if (name.length > 4) {
-            const distance = levenshteinDistance(name, ctx.player.name);
+        if (nn.length > 4) {
+            const distance = levenshteinDistance(nn, normalizeName(ctx.player.name));
             if (distance <= 2) {
                 const uid = ctx.player.userId;
                 if (this.ignoreList.includes(uid)) return null;
@@ -401,10 +463,17 @@ export class Context {
     }
 
     async findGroupInfo(ctx: seal.MsgContext, groupName: string | number): Promise<GroupInfo> {
-        groupName = String(groupName);
+        groupName = String(groupName).trim();
         if (!groupName) return null;
 
-        if (groupName.length > 5 && !isNaN(parseInt(groupName))) {
+        // 剥括号（<名字> 或 名字(123)），提前到纯数字分支之前
+        const match = groupName.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
+        if (match) groupName = match[1] || match[2];
+        const gn = normalizeName(groupName);
+        if (!gn) return null;
+
+        // 纯数字 QQ 群号分支（用原始 groupName，防全角数字误判）
+        if (groupName.length > 5 && /^\d+$/.test(groupName)) {
             const gid = `QQ-Group:${groupName}`;
             // If this is the current group, use ctx.group.groupId for consistency
             if (ctx.group.groupId === gid) {
@@ -414,10 +483,7 @@ export class Context {
             return { isPrivate: false, id: gid, name: ctx.group.groupName || '未知群聊' };
         }
 
-        const match = groupName.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
-        if (match) groupName = match[1] || match[2];
-
-        if (groupName === ctx.group.groupName) return { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName };
+        if (gn === normalizeName(ctx.group.groupName)) return { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName };
 
         // 在上下文中用户的记忆中查找群聊
         const messages = this.messages;
@@ -429,9 +495,9 @@ export class Context {
             if (name.startsWith('_')) continue;
 
             for (const m of AIManager.getAI(uid).memory.memoryList) {
-                if (m.sessionInfo.isPrivate && m.sessionInfo.name === groupName) return { isPrivate: false, id: m.sessionInfo.id, name: m.sessionInfo.name };
+                if (m.sessionInfo.isPrivate && normalizeName(m.sessionInfo.name) === gn) return { isPrivate: false, id: m.sessionInfo.id, name: m.sessionInfo.name };
                 if (m.sessionInfo.isPrivate && m.sessionInfo.name.length > 4) {
-                    const distance = levenshteinDistance(groupName, m.sessionInfo.name);
+                    const distance = levenshteinDistance(gn, normalizeName(m.sessionInfo.name));
                     if (distance <= 2) return { isPrivate: false, id: m.sessionInfo.id, name: m.sessionInfo.name };
                 }
             }
@@ -439,25 +505,25 @@ export class Context {
             userSet.add(uid);
         }
 
-        // 在群聊列表中查找用户
+        // 在群聊列表中查找群
         if (netExists()) {
             const epId = ctx.endPoint.userId;
             const groupList = await getGroupList(epId);
             if (groupList && Array.isArray(groupList)) {
-                const group = groupList.find(item => item.group_name === groupName);
+                const group = groupList.find(item => normalizeName(item.group_name) === gn);
                 if (group && group.group_id) {
                     const gid = `QQ-Group:${group.group_id}`;
                     // If this is the current group, use ctx.group.groupId for consistency
                     if (ctx.group.groupId === gid) {
-                        return { isPrivate: false, id: ctx.group.groupId, name: groupName };
+                        return { isPrivate: false, id: ctx.group.groupId, name: group.group_name };
                     }
-                    return { isPrivate: false, id: gid, name: groupName };
+                    return { isPrivate: false, id: gid, name: group.group_name };
                 }
             }
         }
 
-        if (groupName.length > 4) {
-            const distance = levenshteinDistance(groupName, ctx.group.groupName);
+        if (gn.length > 4) {
+            const distance = levenshteinDistance(gn, normalizeName(ctx.group.groupName));
             if (distance <= 2) return { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName };
         }
 
@@ -565,11 +631,7 @@ export class Context {
         this.messages.forEach(message => message.name = message.uid === uid ? name : message.name);
 
         // Register updated name as alias
-        if (!this.aliases[uid]) this.aliases[uid] = { names: [], lastUsed: {} };
-        if (!this.aliases[uid].names.includes(name)) {
-            this.aliases[uid].names.push(name);
-        }
-        this.aliases[uid].lastUsed[name] = Math.floor(Date.now() / 1000);
+        this.registerAlias(uid, name);
     }
 
     async updateName(epId: string, gid: string, uid: string) {

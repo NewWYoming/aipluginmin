@@ -1,5 +1,6 @@
 import { logger } from "../logger";
 import { ConfigManager } from "../config/configManager";
+import { normalizeName } from "../utils/utils";
 import { Tool } from "./tool";
 
 export function registerAlias() {
@@ -39,7 +40,6 @@ export function registerAlias() {
         }
 
         const uid = ui.id;
-        const now = Math.floor(Date.now() / 1000);
 
         // 确保 aliases 结构存在
         if (!ai.context.aliases[uid]) {
@@ -48,14 +48,13 @@ export function registerAlias() {
         const aliasEntry = ai.context.aliases[uid];
 
         if (action === 'add') {
-            // 去重：检查别名是否已存在
-            if (aliasEntry.names.includes(alias)) {
+            // 去重：归一化比较（全半角/大小写变体不重复入表）
+            if (aliasEntry.names.some(n => normalizeName(n) === normalizeName(alias))) {
                 logger.warning(`edit_alias: 别名'${alias}'已存在于'${user_name}'(uid=${uid})的别名列表中，跳过`);
                 return { content: `别名"${alias}"已在"${user_name}"的别名列表中，无需重复添加`, images: [] };
             }
 
-            aliasEntry.names.push(alias);
-            aliasEntry.lastUsed[alias] = now;
+            ai.context.registerAlias(uid, alias);
             logger.info(`edit_alias: add — uid=${uid}, alias='${alias}' → '${user_name}'`);
             return { content: `已将别名"${alias}"绑定到用户"${user_name}"`, images: [] };
         }
@@ -66,14 +65,14 @@ export function registerAlias() {
                 return { content: `无法删除用户"${user_name}"的当前显示名，只能删除之前绑定的别名`, images: [] };
             }
 
-            // 查找并删除别名
-            const idx = aliasEntry.names.indexOf(alias);
+            // 归一化查找并删除别名
+            const idx = aliasEntry.names.findIndex(n => normalizeName(n) === normalizeName(alias));
             if (idx === -1) {
                 return { content: `未找到别名"${alias}"，该用户当前没有此别名`, images: [] };
             }
-
+            const removed = aliasEntry.names[idx];
             aliasEntry.names.splice(idx, 1);
-            delete aliasEntry.lastUsed[alias];
+            delete aliasEntry.lastUsed[removed];
 
             // 如果该用户没有别名了，清理整个 entry
             if (aliasEntry.names.length === 0) {

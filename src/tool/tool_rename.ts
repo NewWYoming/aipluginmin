@@ -50,11 +50,7 @@ export function registerRename() {
                 ctx.player.name = new_name;
                 ai.context.messages.forEach(message => message.name = message.uid === ui.id ? new_name : message.name);
                 // Register as alias
-                if (!ai.context.aliases[ui.id]) ai.context.aliases[ui.id] = { names: [], lastUsed: {} };
-                if (!ai.context.aliases[ui.id].names.includes(new_name)) {
-                    ai.context.aliases[ui.id].names.push(new_name);
-                }
-                ai.context.aliases[ui.id].lastUsed[new_name] = Math.floor(Date.now() / 1000);
+                ai.context.registerAlias(ui.id, new_name);
             }
             seal.replyToSender(ctx, msg, `已将<${ctx.player.name}>的群名片设置为<${new_name}>`);
             return { content: '设置成功', images: [] };

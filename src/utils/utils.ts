@@ -120,6 +120,19 @@ export function getCommonGroup(a: GroupInfo[], b: GroupInfo[]): GroupInfo[] {
     const aid = new Set(a.map(g => g.id));
     return b.filter(g => aid.has(g.id));
 }
+/**
+ * 名称归一化：仅用于比较匹配，不用于展示。
+ * toLowerCase + 全角FF01-FF5E→半角ASCII + 去零宽/变体选择符 + 去emoji（含肤色修饰符）+ 去全部空白
+ */
+export function normalizeName(s: string): string {
+    return String(s ?? '')
+        .toLowerCase()
+        .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+        .replace(/[\u200B-\u200D\uFEFF\uFE0E\uFE0F]/g, '')
+        .replace(/\p{Extended_Pictographic}/gu, '')
+        .replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '')
+        .replace(/\s+/g, '');
+}
 export function levenshteinDistance(a: string, b: string): number {
     const m = a.length, n = b.length;
     const dp: number[][] = [];
