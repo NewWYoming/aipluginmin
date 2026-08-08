@@ -29,6 +29,7 @@ Shared utility functions consumed across the plugin: ID generation, message form
 | `aliasToCmd` | Resolve user-defined command aliases from `aliasMap`. |
 | `levenshteinDistance` | Classic edit distance for strings. |
 | `getCommonUser` / `getCommonGroup` | Set-intersection helpers for user/group lists. `getCommonUser` is used by `src/AI/memory.ts` (user-list filter/scoring); `getCommonGroup` has no in-repo consumers — kept as a reserved utility. `getCommonKeyword` was removed (v5.1.30 dead-code cleanup; it was only used by the deleted `Memory.calculateSimilarity`). |
+| `normalizeName` | Name normalization for **comparison only** (never for display): toLowerCase + fullwidth `FF01-FF5E`→halfwidth ASCII (0xFEE0 offset) + strips zero-width/variation selectors (`U+200B-200D`/`U+FEFF`/`U+FE0E`/`U+FE0F`) + strips emoji (`\p{Extended_Pictographic}`) and skin-tone modifiers (`U+1F3FB-1F3FF`) + removes all whitespace. Consumers: `src/AI/context.ts` (`findUserInfo`/`findGroupInfo`/`registerAlias`) and `src/tool/tool_alias.ts` (add/delete normalized lookup). Added in v5.1.31 to fix pure-numeric-nickname misjudgment. |
 
 ### `utils_message.ts` — AI context assembly
 
@@ -95,8 +96,8 @@ All follow the same pattern: `getNet()` → `net.callApi(epId, action, params)` 
 
 | Consumer | What it uses |
 |----------|-------------|
-| **`src/AI/`** (core chat) | `handleMessages`, `handleReply`, `buildSystemMessage`, `checkRepeat`, `transformArrayToContent`, `revive`, `generateId`, `replyToSender`, `transformMsgId`, `levenshteinDistance` |
+| **`src/AI/`** (core chat) | `handleMessages`, `handleReply`, `buildSystemMessage`, `checkRepeat`, `transformArrayToContent`, `revive`, `generateId`, `replyToSender`, `transformMsgId`, `levenshteinDistance`, `normalizeName` |
 | **`src/cmd/`** (commands) | `getCtxAndMsg`, `replyToSender`, `transformMsgId`, `createCtx`, various OB11 wrappers |
-| **`src/tool/`** (function-calling tools) | `generateId`, `transformMsgId`/`transformMsgIdBack`, `replyToSender`, `parseSpecialTokens`, `handleReply`, `transformArrayToContent`, `fixJsonString`, `fmtDate`, `buildContent`/`getRoleSetting`, `getCtxAndMsg`/`getSessionCtxAndMsg`, OB11 API wrappers (group management, member queries) |
+| **`src/tool/`** (function-calling tools) | `generateId`, `transformMsgId`/`transformMsgIdBack`, `replyToSender`, `parseSpecialTokens`, `handleReply`, `transformArrayToContent`, `fixJsonString`, `fmtDate`, `buildContent`/`getRoleSetting`, `getCtxAndMsg`/`getSessionCtxAndMsg`, `normalizeName`, OB11 API wrappers (group management, member queries) |
 | **`src/config/configManager.ts`** | Config reader — all utils files import `ConfigManager` for feature flags and settings |
 | **Plugin entry (`src/index.ts`)** | `checkUpdate` called once on startup |

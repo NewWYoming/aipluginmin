@@ -25,11 +25,11 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_voice.ts` | `text_to_sound` | Voice / TTS (custom & API modes) |
 | `tool_music.ts` | `music_play` | Music search & play |
 | `tool_web.ts` | `web_search`, `web_read` | Web search (Jina primary + SearXNG fallback) & scraping (Jina Reader) |
-| `tool_alias.ts` | `edit_alias` | User alias mapping (add/delete) |
+| `tool_alias.ts` | `edit_alias` | User alias mapping (add/delete). _Aug 9: add 分支按 `normalizeName` 归一化去重（全半角/大小写变体命中 → warning+跳过），未命中则委托 `ai.context.registerAlias(uid, alias)`；delete 分支归一化 `findIndex` 捕获原名 `removed` 后 splice + `delete aliasEntry.lastUsed[removed]`；删除未使用的 `const now`_ |
 | `tool_time.ts` | `get_time`, `set_timer`, `show_timer_list`, `cancel_timer` | Time & timers (datetime/seconds params added; old year/month/day/hour/minute deprecated). _Jun 18: show_timer_list now resolves `__TASK_<id>__` content via TaskManager._ |
 | `tool_task.ts` | `create_task`, `list_tasks`, `update_task`, `delete_task` | Task management (shared TaskManager with AI tools) |
 | `tool_ban.ts` | `ban`, `whole_ban`, `get_ban_list` | QQ group mute |
-| `tool_rename.ts` | `rename` | Group nickname |
+| `tool_rename.ts` | `rename` | Group nickname. _Aug 9: 别名注册块（原 `if (!ai.context.aliases[ui.id]) … includes push lastUsed` 约 5 行）替换为 `ai.context.registerAlias(ui.id, new_name)`（归一化去重）_ |
 | `tool_group_sign.ts` | `group_sign` | Group check-in |
 | `tool_person_info.ts` | `get_person_info` | User profile |
 | `tool_qq_list.ts` | `get_list`, `get_group_member_list`, `search_chat`, `search_common_group` | QQ lists & search |
@@ -223,6 +223,7 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | Integration | Direction | Details |
 |---|---|---|---|
 | **`src/AI/AI.ts`** — `AIManager`, `AI` class | Imported by tools | `ai.context`, `ai.memory`, `ai.imagePool`, `ai.id`, `ai.tool` (the `ToolManager` instance) |
+| **`src/AI/context.ts`** — `context.registerAlias(uid, name)` | Imported by `tool_alias.ts`, `tool_rename.ts` | Canonical alias registration: normalized dedup (`normalizeName`), refreshes `lastUsed` on equivalent duplicate, 10-entry cap evicting oldest |
 | **`src/AI/image.ts`** — `Image` class | Imported by tools | Returned in `solve` results; used for rendering, message sending |
 | **`src/AI/memory.ts`** — `knowledgeMM`, `searchOptions` | Imported by `tool_memory.ts` | Knowledge-base memory operations; `searchOptions.hardUserFilter` — tool path hard-filters by user when explicitly named |
 | **`src/config/configManager.ts`** — `ConfigManager` | Imported by most tools | `ConfigManager.tool.*` (decks, bans, default-closed, maxCallCount, record paths, character), `ConfigManager.backend.*` (web URLs, render URL, TTS config, music API), `ConfigManager.message.*` (showNumber, isPrefix) |
