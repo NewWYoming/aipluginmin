@@ -191,20 +191,21 @@ export class MemoryManager {
     }
 
     reviveMemoryMap() {
-        // 检测旧格式记忆（无 scope 字段）——直接清空
-        let hasOldFormat = false;
+        // 旧格式记忆（无 scope 字段或 scope 为空）——按 sessionInfo 推断迁移，保留数据
+        let migrated = false;
         for (const id in this.memoryMap) {
             const m = this.memoryMap[id] as any;
-            if (!m.hasOwnProperty('scope')) {
-                hasOldFormat = true;
-                break;
+            if (!m.hasOwnProperty('scope') || m.scope == null) {
+                m.scope = m.sessionInfo && m.sessionInfo.isPrivate ? 'private' : 'group';
+                if (!m.sessionInfo || !m.sessionInfo.id) {
+                    m.sessionInfo = { id: '', isPrivate: false, name: '' };
+                }
+                migrated = true;
             }
         }
-        if (hasOldFormat) {
-            this.memoryMap = {};
+        if (migrated) {
             (this as any)._needsSave = true;
-            logger.info('检测到旧格式记忆（无 scope 字段），已清空。新记忆将使用新格式。');
-            return;
+            logger.info('检测到旧格式记忆（无 scope 字段），已按 sessionInfo 推断迁移，记忆数据保留。');
         }
 
         // 正常 revival（原有逻辑）
@@ -805,8 +806,8 @@ export class KnowledgeMemoryManager extends MemoryManager {
                         m.userList = value.split(/[,，]/).map(s => {
                             const segs = s.split(/[:：]/).map(s => s.trim()).filter(s => s);
                             if (segs.length < 2) return null;
-                            const name = value.replace(/[:：].*$/, '').trim();
-                            const id = segs[segs.length - 1];
+                            const name = segs[0];
+                            const id = 'QQ:' + segs[segs.length - 1];
                             if (!name || !id) return null;
                             return { isPrivate: true, id, name };
                         }).filter(ui => ui) as UserInfo[];
@@ -816,8 +817,8 @@ export class KnowledgeMemoryManager extends MemoryManager {
                         m.groupList = value.split(/[,，]/).map(s => {
                             const segs = s.split(/[:：]/).map(s => s.trim()).filter(s => s);
                             if (segs.length < 2) return null;
-                            const name = value.replace(/[:：].*$/, '').trim();
-                            const id = segs[segs.length - 1];
+                            const name = segs[0];
+                            const id = 'QQ-Group:' + segs[segs.length - 1];
                             if (!name || !id) return null;
                             return { isPrivate: false, id, name };
                         }).filter(ui => ui) as GroupInfo[];
@@ -849,7 +850,13 @@ export class KnowledgeMemoryManager extends MemoryManager {
                 }
             }
 
-            if (!m.id && !m.text) continue;
+            if (!m.text) continue;
+            if (!m.id) {
+                // 无 ID 条目：内容哈希生成稳定 id（跨 rebuild 统计可保留，LLM 可引用）
+                let h = 5381;
+                for (let i = 0; i < m.text.length; i++) h = ((h << 5) + h + m.text.charCodeAt(i)) >>> 0;
+                m.id = 'kb' + h.toString(36);
+            }
 
             memoryMap[m.id] = m;
         }
