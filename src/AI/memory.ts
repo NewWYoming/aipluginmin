@@ -57,6 +57,13 @@ function calcBaseScore(kwScore: number, recency: number, importanceScore: number
     return 0.45 * kwScore + 0.25 * recency + 0.20 * importanceScore + 0.10 * userMatch;
 }
 
+/** djb2 内容哈希（32 位无符号，toString(36) 短 id）——知识库无 ID 条目稳定 id 与 Y5 解析缓存共用 */
+function djb2Hash(s: string): string {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+}
+
 export class Memory {
     static validKeys: (keyof Memory)[] = ['id', 'text', 'sessionInfo', 'userList', 'groupList', 'createTime', 'lastMentionTime', 'keywords', 'weight', 'images', 'scope', 'importance'];
     id: string; // 记忆ID
@@ -128,6 +135,8 @@ export class Memory {
 export interface UserObservation {
   rawMessages: string[];
   lastSpeak: number;
+  /** Y9: 印象 LLM 失败冷却时间戳（秒）；失败不丢观察，冷却后整批重试。随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），最长 5 分钟，无害 */
+  impressionFailAt?: number;
 }
 
 export interface Impression {
@@ -358,10 +367,13 @@ export class MemoryManager {
             if (m.keywords.some(kw => kw.length >= 2 && (s.includes(kw) || sTokens.includes(kw)))) {
                 m.weight = Math.min(10, m.weight + increase);
                 m.lastMentionTime = now;
+                // Y5: 知识库权重脏标记（仅 KnowledgeMemoryManager 实例；会话 AI 无此字段，instanceof 守卫跳过）
+                if (this instanceof KnowledgeMemoryManager) (this as any)._weightsDirty = true;
             } else {
                 // O1.2: 新记忆保护期——创建后 1 天内不衰减（时间保护与逐消息衰减错配的最小取舍，M4）
                 if (now - m.createTime < 86400) continue;
                 m.weight = Math.max(0, m.weight - decrease);
+                if (this instanceof KnowledgeMemoryManager) (this as any)._weightsDirty = true;
             }
         }
     }
@@ -374,7 +386,8 @@ export class MemoryManager {
         // 会话自身记忆权重更新
         this.updateMemoryWeight(s, role);
         // 群内用户的记忆权重更新
-        if (!ctx.isPrivate) context.userInfoList.forEach(ui => AIManager.getAI(ui.id).memory.updateMemoryWeight(s, role));
+        // P5: 只对已缓存实例执行，避免 create-on-read 生成僵尸 AI 实例永久驻留 cache（未缓存用户更新空 memoryMap 本就是 no-op）
+        if (!ctx.isPrivate) context.userInfoList.forEach(ui => { const cached = AIManager.cache[ui.id]; if (cached) cached.memory.updateMemoryWeight(s, role); });
     }
 
     /** LLM 精排候选记忆（Phase 4 — 后处理步骤） */
@@ -478,6 +491,7 @@ export class MemoryManager {
 
     getPOVFilteredMemories(currentScope: string, currentSessionId: string): Memory[] {
         return this.memoryList.filter(m => {
+            // 预留分支：当前无写入方（addMemory 只产生 private/group），bot 记忆块恒空
             if (m.scope === 'universal') return true;
             if (m.scope === currentScope && m.sessionInfo.id === currentSessionId) return true;
             return false;
@@ -705,6 +719,11 @@ export class MemoryManager {
 }
 
 export class KnowledgeMemoryManager extends MemoryManager {
+    /** Y5: 上次成功解析的知识库文本哈希（运行时字段，不入存储；文本未变则跳过全量解析+写盘） */
+    _lastParsedHash: string = '';
+    /** Y5: 知识库记忆权重脏标记——updateMemoryWeight 实际变更时置位，save() 后清除（防 hash 缓存跳过写盘致权重漂移） */
+    _weightsDirty: boolean = false;
+
     constructor() {
         super();
     }
@@ -736,6 +755,13 @@ export class KnowledgeMemoryManager extends MemoryManager {
         if (roleIndex < 0 || roleIndex >= knowledgeMemoryStringList.length) return;
         const s = knowledgeMemoryStringList[roleIndex];
         if (!s) return;
+
+        // Y5: 内容哈希缓存——文本未变则跳过全量解析与写盘（roleIndex 参与哈希，多知识库条目正确切换）
+        const hash = djb2Hash(roleIndex + '\n' + s);
+        if (this._lastParsedHash === hash) {
+            if (this._weightsDirty) { this.save(); this._weightsDirty = false; }
+            return;
+        }
 
         const memoryMap: { [id: string]: Memory } = {}
         const segs = s.split(/\n-{3,}\n/);
@@ -809,9 +835,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
             if (!m.text) continue;
             if (!m.id) {
                 // 无 ID 条目：内容哈希生成稳定 id（跨 rebuild 统计可保留，LLM 可引用）
-                let h = 5381;
-                for (let i = 0; i < m.text.length; i++) h = ((h << 5) + h + m.text.charCodeAt(i)) >>> 0;
-                m.id = 'kb' + h.toString(36);
+                m.id = 'kb' + djb2Hash(m.text);
             }
 
             memoryMap[m.id] = m;
@@ -832,6 +856,8 @@ export class KnowledgeMemoryManager extends MemoryManager {
         })
 
         this.memoryMap = memoryMap;
+        this._lastParsedHash = hash;
+        this._weightsDirty = false;
         this.save();
     }
 

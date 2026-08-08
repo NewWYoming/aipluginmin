@@ -176,8 +176,8 @@ export class Context {
             const imp = ai.memory.impressions[uid];
             const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
 
-            if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid)) {
-                // P3: fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）
+            if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid) && now >= (obs.impressionFailAt || 0)) {
+                // P3: fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）；Y9: 失败冷却期内不触发
                 this.impressionInFlight.add(uid);
                 const batch = obs.rawMessages.slice();
                 ai.memory.updateImpression(uid, batch).then((success) => {
@@ -185,13 +185,16 @@ export class Context {
                     if (success) {
                         // 只移除本次已消费的批次，异步期间新增的消息保留
                         obs.rawMessages.splice(0, batch.length);
+                        obs.impressionFailAt = 0;  // 成功清除冷却
                     } else {
-                        // 失败：丢弃最旧一条，其余并入下一批重试
-                        obs.rawMessages.shift();
+                        // Y9: 失败不丢观察——5 分钟冷却后整批重试（数据损失优先）
+                        // M3: impressionFailAt 随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），冷却最长 5 分钟，无害
+                        if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;  // M4: 数据不足(<3)不设冷却，仍不 shift
                     }
                 }).catch(() => {
                     this.impressionInFlight.delete(uid);
-                    obs.rawMessages.shift();
+                    // Y9: 异常同样不丢观察，冷却后重试
+                    if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;
                 });
             }
         }
