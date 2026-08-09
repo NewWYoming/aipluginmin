@@ -61,7 +61,7 @@ export function registerMemory() {
 
         // Resolve about list to UserInfo (for userList association)
         const uiList: UserInfo[] = [];
-        // R4.2/Y6: name 优先激活，about 按 id 去重
+        // name 优先激活，about 按 id 去重
         if (name && name.trim()) {
             const nameUi = await ai.context.findUserInfo(ctx, name, true);
             if (nameUi !== null) uiList.push(nameUi);
@@ -187,7 +187,7 @@ export function registerMemory() {
         const { id_list = [], text, keywords, importance, about = [] } = args;
         if (id_list.length === 0) return { content: '参数缺失：需提供 id_list', images: [] };
 
-        // M1: findUserInfo 是 async，必须 await Promise.all 并行解析
+        // findUserInfo 是 async，必须 await Promise.all 并行解析
         const uiList = (await Promise.all(about.map(n => ai.context.findUserInfo(ctx, n, true)))).filter(ui => ui !== null);
 
         let updated = 0;
@@ -225,7 +225,7 @@ export function registerMemory() {
     });
     toolMerge.solve = async (ctx, _, ai, args) => {
         const { id_list = [] } = args;
-        // M1: 先按 id 去重再取记忆——重复 id（如 [A, A, B]）会让同一对象出现多次，slice(1) 的 restIds 会含基准 id 导致合并时基准被误删
+        // 先按 id 去重再取记忆——重复 id（如 [A, A, B]）会让同一对象出现多次，slice(1) 的 restIds 会含基准 id 导致合并时基准被误删
         const memories = [...new Set(id_list)].map(id => ai.memory.memoryMap[id]).filter(m => m);
         if (memories.length < 2) return { content: '需至少 2 条有效记忆', images: [] };
         let truncated = false;
@@ -325,7 +325,7 @@ export function registerMemory() {
         if (targetAi.memory.memoryIds.length === 0) return { content: `暂无记忆`, images: [] };
 
         const uiList: UserInfo[] = [];
-        // R4.1: name 优先激活，userList 按 id 去重
+        // name 优先激活，userList 按 id 去重
         if (name && name.trim()) {
             const nameUi = await ai.context.findUserInfo(ctx, name, true);
             if (nameUi !== null) uiList.push(nameUi);

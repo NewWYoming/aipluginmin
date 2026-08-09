@@ -57,7 +57,7 @@ function calcBaseScore(kwScore: number, recency: number, importanceScore: number
     return 0.45 * kwScore + 0.25 * recency + 0.20 * importanceScore + 0.10 * userMatch;
 }
 
-/** djb2 内容哈希（32 位无符号，toString(36) 短 id）——知识库无 ID 条目稳定 id 与 Y5 解析缓存共用 */
+/** djb2 内容哈希（32 位无符号，toString(36) 短 id）——知识库无 ID 条目稳定 id 与解析缓存共用 */
 function djb2Hash(s: string): string {
     let h = 5381;
     for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
@@ -135,7 +135,7 @@ export class Memory {
 export interface UserObservation {
   rawMessages: string[];
   lastSpeak: number;
-  /** Y9: 印象 LLM 失败冷却时间戳（秒）；失败不丢观察，冷却后整批重试。随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），最长 5 分钟，无害 */
+  /** 印象 LLM 失败冷却时间戳（秒）；失败不丢观察，冷却后整批重试。随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），最长 5 分钟，无害 */
   impressionFailAt?: number;
 }
 
@@ -149,7 +149,7 @@ export class MemoryManager {
     memoryMap: { [id: string]: Memory };
     impressions: { [userId: string]: Impression };
     observations: { [userId: string]: UserObservation };
-    /** F3: 每日记忆整理门闩（存 toDateString()，随 validKeys 持久化——revive 只拷贝 validKeys 字段，防重启当天二次执行） */
+    /** 每日记忆整理门闩（存 toDateString()，随 validKeys 持久化——revive 只拷贝 validKeys 字段，防重启当天二次执行） */
     _lastTidyDate: string;
 
     constructor() {
@@ -266,7 +266,7 @@ export class MemoryManager {
 
         if (kws.length > 0) {
             for (const id in map) {
-                // P4: 纯子串匹配（删除语义比 O1.1 的子串+token 更宽）；单字关键词（len<2）不可删，有意取舍
+                // 纯子串匹配（删除语义比子串+token 匹配更宽）；单字关键词（len<2）不可删，有意取舍
                 if (kws.some(kw => kw.length >= 2 && (map[id].keywords.some(k => k.includes(kw)) || map[id].text.includes(kw)))) {
                     delete map[id];
                 }
@@ -281,7 +281,7 @@ export class MemoryManager {
         return deleted;
     }
 
-    /** F2: 合并多条记忆为一条——以第一条为基准写入合并内容/关键词；userList/groupList 按 id 合并去重；createTime 取最早、lastMentionTime 取最新、weight 取最大(cap 10)；删除其余记忆并返回基准条 */
+    /** 合并多条记忆为一条——以第一条为基准写入合并内容/关键词；userList/groupList 按 id 合并去重；createTime 取最早、lastMentionTime 取最新、weight 取最大(cap 10)；删除其余记忆并返回基准条 */
     mergeMemories(memoryList: Memory[], newText: string, newKeywords: string[]): Memory {
         const m = memoryList[0];
         m.text = newText;
@@ -309,19 +309,19 @@ export class MemoryManager {
         return m;
     }
 
-    /** F3: 每日一次的记忆整理（合并重复 + 删除冗余）。force=true 手动全权整理（跳过数量门槛）。返回 0=跳过/1=成功/2=失败 */
+    /** 每日一次的记忆整理（合并重复 + 删除冗余）。force=true 手动全权整理（跳过数量门槛）。返回 0=跳过/1=成功/2=失败 */
     async tidyMemories(force: boolean = false): Promise<number> {
         const today = new Date().toDateString();
-        // M1: 门闩检查——守卫早退不消耗当日门闩（条件随每条消息重新评估）
+        // 门闩检查——守卫早退不消耗当日门闩（条件随每条消息重新评估）
         if (this._lastTidyDate === today) return 0;
-        // M4: force=true 跳过 length<10 守卫（手动全权整理）；force=false 自动路径检查数量门槛与触发条件
+        // force=true 跳过 length<10 守卫（手动全权整理）；force=false 自动路径检查数量门槛与触发条件
         if (!force) {
             if (this.memoryList.length < 10) return 0;
             const now = Math.floor(Date.now() / 1000);
-            const hasOld = this.memoryList.some(m => (now - m.createTime > 30 * 86400) || (now - m.lastMentionTime > 30 * 86400)); // M6: OR 语义
+            const hasOld = this.memoryList.some(m => (now - m.createTime > 30 * 86400) || (now - m.lastMentionTime > 30 * 86400)); // OR 语义
             if (this.memoryList.length < 20 && !hasOld) return 0;
         }
-        // M1: 守卫通过后置门闩（LLM 工作前——fire-and-forget 窗口竞态保护；守卫→置位间无 await，单线程安全；失败不回滚=当日不重试）
+        // 守卫通过后置门闩（LLM 工作前——fire-and-forget 窗口竞态保护；守卫→置位间无 await，单线程安全；失败不回滚=当日不重试）
         this._lastTidyDate = today;
         // LLM 整理
         try {
@@ -350,7 +350,7 @@ export class MemoryManager {
             const duplicates: string[][] = (parsed.duplicates || []).slice(0, 2)
                 .map((pair: any) => pair.filter((id: any) => this.memoryMap[id]))
                 .filter((pair: any) => pair.length >= 2);
-            // 直接执行——obsolete: M5 先取值再删（日志保留完整文本）
+            // 直接执行——obsolete: 先取值再删（日志保留完整文本）
             if (obsolete.length > 0) {
                 const texts = obsolete.map(id => this.memoryMap[id]?.text.slice(0, 50));
                 this.deleteMemory(obsolete);
@@ -358,7 +358,7 @@ export class MemoryManager {
             }
             // duplicates: 每组 generateMergeText → mergeMemories；null 跳过该组（不删）
             for (const pair of duplicates) {
-                // Set 去重防组内重复 id（与 merge_memory 工具 M1 修复同源：重复对象会让 mergeMemories 的 restIds 误删基准）
+                // Set 去重防组内重复 id（与 merge_memory 工具修复同源：重复对象会让 mergeMemories 的 restIds 误删基准）
                 const group = [...new Set(pair)].map(id => this.memoryMap[id]).filter(m => m);
                 if (group.length < 2) continue;
                 const merged = await generateMergeText(group);
@@ -452,18 +452,18 @@ export class MemoryManager {
         const increase = role === 'user' ? 1 : 0.1;
         const decrease = role === 'user' ? 0.1 : 0;
         const now = Math.floor(Date.now() / 1000);
-        const sTokens = tokenizeForScore(s);  // M3: hoist 循环外
+        const sTokens = tokenizeForScore(s);  // hoist 循环外
 
         for (const id in this.memoryMap) {
             const m = this.memoryMap[id];
-            // O1.1: len>=2 守卫 + 子串+token 双通道（对全部关键词）；单字关键词（len<2）永不命中；中文 3+ 字词走子串兜底
+            // len>=2 守卫 + 子串+token 双通道（对全部关键词）；单字关键词（len<2）永不命中；中文 3+ 字词走子串兜底
             if (m.keywords.some(kw => kw.length >= 2 && (s.includes(kw) || sTokens.includes(kw)))) {
                 m.weight = Math.min(10, m.weight + increase);
                 m.lastMentionTime = now;
-                // Y5: 知识库权重脏标记（仅 KnowledgeMemoryManager 实例；会话 AI 无此字段，instanceof 守卫跳过）
+                // 知识库权重脏标记（仅 KnowledgeMemoryManager 实例；会话 AI 无此字段，instanceof 守卫跳过）
                 if (this instanceof KnowledgeMemoryManager) (this as any)._weightsDirty = true;
             } else {
-                // O1.2: 新记忆保护期——创建后 1 天内不衰减（时间保护与逐消息衰减错配的最小取舍，M4）
+                // 新记忆保护期——创建后 1 天内不衰减（时间保护与逐消息衰减错配的最小取舍）
                 if (now - m.createTime < 86400) continue;
                 m.weight = Math.max(0, m.weight - decrease);
                 if (this instanceof KnowledgeMemoryManager) (this as any)._weightsDirty = true;
@@ -479,7 +479,7 @@ export class MemoryManager {
         // 会话自身记忆权重更新
         this.updateMemoryWeight(s, role);
         // 群内用户的记忆权重更新
-        // P5: 只对已缓存实例执行，避免 create-on-read 生成僵尸 AI 实例永久驻留 cache（未缓存用户更新空 memoryMap 本就是 no-op）
+        // 只对已缓存实例执行，避免 create-on-read 生成僵尸 AI 实例永久驻留 cache（未缓存用户更新空 memoryMap 本就是 no-op）
         if (!ctx.isPrivate) context.userInfoList.forEach(ui => { const cached = AIManager.cache[ui.id]; if (cached) cached.memory.updateMemoryWeight(s, role); });
     }
 
@@ -517,7 +517,7 @@ export class MemoryManager {
 
             const result = candidates
                 .map(function(m: any) {
-                    // O2: 缺分回退 _baseScore（LLM 返回序号而非 id 或漏评时不再系统性淘汰）
+                    // 缺分回退 _baseScore（LLM 返回序号而非 id 或漏评时不再系统性淘汰）
                     const llmScore = scores[m.id] !== undefined ? scores[m.id] / 5 : (m._baseScore || 0);
                     const finalScore = 0.7 * llmScore + 0.3 * ((m._baseScore || 0));
                     (m as any)._finalScore = finalScore;
@@ -810,7 +810,7 @@ export class MemoryManager {
     }
 }
 
-/** F2: LLM 生成多条记忆的合并文本与关键词（merge_memory 工具共享函数）。
+/** LLM 生成多条记忆的合并文本与关键词（merge_memory 工具共享函数）。
  * 约束：保留全部事实/不得遗漏重要信息/合并后长度不超过原文总和；无法合并时输出首条原文；空 text 或任何失败 → 返回 null（调用方不删任何记忆） */
 export async function generateMergeText(memoryList: Memory[]): Promise<{ text: string; keywords: string[] } | null> {
     if (memoryList.length === 0) return null;
@@ -860,9 +860,9 @@ export async function generateMergeText(memoryList: Memory[]): Promise<{ text: s
 }
 
 export class KnowledgeMemoryManager extends MemoryManager {
-    /** Y5: 上次成功解析的知识库文本哈希（运行时字段，不入存储；文本未变则跳过全量解析+写盘） */
+    /** 上次成功解析的知识库文本哈希（运行时字段，不入存储；文本未变则跳过全量解析+写盘） */
     _lastParsedHash: string = '';
-    /** Y5: 知识库记忆权重脏标记——updateMemoryWeight 实际变更时置位，save() 后清除（防 hash 缓存跳过写盘致权重漂移） */
+    /** 知识库记忆权重脏标记——updateMemoryWeight 实际变更时置位，save() 后清除（防 hash 缓存跳过写盘致权重漂移） */
     _weightsDirty: boolean = false;
 
     constructor() {
@@ -897,7 +897,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
         const s = knowledgeMemoryStringList[roleIndex];
         if (!s) return;
 
-        // Y5: 内容哈希缓存——文本未变则跳过全量解析与写盘（roleIndex 参与哈希，多知识库条目正确切换）
+        // 内容哈希缓存——文本未变则跳过全量解析与写盘（roleIndex 参与哈希，多知识库条目正确切换）
         const hash = djb2Hash(roleIndex + '\n' + s);
         if (this._lastParsedHash === hash) {
             if (this._weightsDirty) { this.save(); this._weightsDirty = false; }

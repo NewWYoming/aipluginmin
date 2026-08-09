@@ -32,7 +32,7 @@ export class Context {
     ignoreList: string[];
     autoNameMod: number; // 自动修改上下文里的名字，0:不自动修改，1:修改为昵称，2:修改为群名片
     aliases: { [uid: string]: { names: string[]; lastUsed: { [name: string]: number } } };
-    /** P3: 印象更新 in-flight 集合，防止 fire-and-forget 期间重复触发（运行时字段，不参与持久化） */
+    /** 印象更新 in-flight 集合，防止 fire-and-forget 期间重复触发（运行时字段，不参与持久化） */
     private impressionInFlight = new Set<string>();
 
     lastReply: string;
@@ -177,7 +177,7 @@ export class Context {
             const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
 
             if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid) && now >= (obs.impressionFailAt || 0)) {
-                // P3: fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）；Y9: 失败冷却期内不触发
+                // fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）；失败冷却期内不触发
                 this.impressionInFlight.add(uid);
                 const batch = obs.rawMessages.slice();
                 ai.memory.updateImpression(uid, batch).then((success) => {
@@ -187,13 +187,13 @@ export class Context {
                         obs.rawMessages.splice(0, batch.length);
                         obs.impressionFailAt = 0;  // 成功清除冷却
                     } else {
-                        // Y9: 失败不丢观察——5 分钟冷却后整批重试（数据损失优先）
-                        // M3: impressionFailAt 随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），冷却最长 5 分钟，无害
-                        if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;  // M4: 数据不足(<3)不设冷却，仍不 shift
+                        // 失败不丢观察——5 分钟冷却后整批重试（数据损失优先）
+                        // impressionFailAt 随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），冷却最长 5 分钟，无害
+                        if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;  // 数据不足(<3)不设冷却，仍不 shift
                     }
                 }).catch(() => {
                     this.impressionInFlight.delete(uid);
-                    // Y9: 异常同样不丢观察，冷却后重试
+                    // 异常同样不丢观察，冷却后重试
                     if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;
                 });
             }

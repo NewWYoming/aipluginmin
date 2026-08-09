@@ -252,7 +252,7 @@ export class AI {
             this._lastCleanupDate = today;
             await this.memory.cleanupImpressions(ctx, this);
             this.context.cleanupStaleAliases();
-            // F3: 每日记忆整理（fire-and-forget——tidy 内部最长 45s LLM 调用，不能阻塞消息链路；门闩在 tidyMemories 入口已置；M2: 调用方负责 saveAI）
+            // 每日记忆整理（fire-and-forget——tidy 内部最长 45s LLM 调用，不能阻塞消息链路；门闩在 tidyMemories 入口已置；调用方负责 saveAI）
             this.memory.tidyMemories().then(result => { if (result === 1) AIManager.saveAI(this.id); }).catch(() => {});
         }
 

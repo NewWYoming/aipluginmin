@@ -49,7 +49,7 @@ async function handleMemoryScope(
         }
         case 'tidy': {
             const result = await cfg.ai.memory.tidyMemories(true);
-            if (result === 1) AIManager.saveAI(cfg.saveId);   // M2: 命令路径也 save
+            if (result === 1) AIManager.saveAI(cfg.saveId);   // 命令路径也 save
             seal.replyToSender(ctx, msg, result === 1 ? '记忆整理完成' : result === 2 ? '记忆整理失败，已记录日志' : '今日已整理过，明天再试');
             return ret;
         }
