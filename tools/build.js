@@ -24,7 +24,8 @@ const configAll = require('./build-config');
       if (versionMatch && versionMatch[1]) {
         const oldVer = versionMatch[1];
         if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-        fs.copyFileSync(config.outfile, path.join(backupDir, `aiplugin4-v${oldVer}.js`));
+        const outputBaseName = path.basename(config.outfile, path.extname(config.outfile));
+        fs.copyFileSync(config.outfile, path.join(backupDir, `${outputBaseName}-v${oldVer}.js`));
       }
     }
     fs.rmSync(distDir, { recursive: true, force: true });

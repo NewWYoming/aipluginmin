@@ -1,10 +1,10 @@
 {
-  "name": "aiplugin4",
+  "name": "aipluginmin",
   "version": "1.0.0",
   "description": "ai plugin for sealdice",
   "main": "build/index.js",
   "typings": "build/index.d.ts",
-  "repository": "https://github.com/error2913/aiplugin4",
+  "repository": "https://github.com/NewWYoming/aipluginmin",
   "license": "MIT",
   "keywords": [],
   "scripts": {

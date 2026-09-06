@@ -1,4 +1,4 @@
-var filename = 'aiplugin4.js'
+var filename = 'aipluginmin.js'
 
 module.exports = {
   dev: {

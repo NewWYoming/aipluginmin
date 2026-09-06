@@ -2,7 +2,7 @@
 
 ## 1. Responsibility
 
-Configuration registration and management for the `aiplugin4` SealDice plugin. This module:
+Configuration registration and management for the `aipluginmin` SealDice plugin. Its internal SealDice extension identifiers deliberately remain `aiplugin4` and `aiplugin4_*` so existing user configuration remains readable. This module:
 
 - **Registers** all user-facing configuration keys with the SealDice host via `seal.ext.register*Config()` (string, int, bool, float, option, template).
 - **Reads** runtime configuration values on demand (with a short-lived cache).
@@ -92,7 +92,7 @@ Runtime access (any module):
 ### `config.ts` — Constants
 
 This file is not a config class. It exports plain constants used throughout the plugin:
-- `VERSION` (currently `5.1.36`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata.
+- `VERSION` (currently `5.1.38`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata. `NAME` remains `aiplugin4` for configuration compatibility.
 - `CQTYPESALLOW` — allowed CQ message types.
 - `PRIVILEGELEVELMAP` — role-to-permission-level mapping.
 - `HELPMAP` — help text definitions for commands.

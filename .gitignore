@@ -16,8 +16,12 @@ dist-backups/
 dev/
 docs/
 .playwright-mcp/
-.slim/
+.codemap/
+# Local Codex Codemap plugin; retained in the working tree, not project source.
+plugins/codemap/
+plugins/codemap.md
 .agents/
 .claude/
+.codex/
 skills-lock.json
 .opencode/

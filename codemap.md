@@ -1,4 +1,4 @@
-# Repository Atlas: aiplugin4
+# Repository Atlas: aipluginmin
 
 > A SealDice JS plugin that makes the dice bot converse like a human. Single bundled JS output loaded by SealDice.
 

@@ -1,4 +1,4 @@
-# src/ — AI Plugin Core (aiplugin4)
+# src/ — AI Plugin Core (aipluginmin)
 
 ## Responsibility
 

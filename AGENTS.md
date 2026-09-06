@@ -1,14 +1,14 @@
-# AGENTS.md — aiplugin4
+# AGENTS.md — aipluginmin
 
 ## What this is
 
-A SealDice JS plugin (AI骰娘4) that makes the dice bot converse like a human. Runs inside the SealDice host runtime. Single bundled JS output loaded by SealDice.
+A SealDice JS plugin (AI骰娘Min) that makes the dice bot converse like a human. Runs inside the SealDice host runtime. Its public bundle is `aipluginmin.js`; the internal `aiplugin4` SealDice configuration namespace is retained for compatibility.
 
 ## Build
 
 ```bash
-npm run build       # production → dist/aiplugin4.js
-npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
+npm run build       # production → dist/aipluginmin.js
+npm run build-dev   # dev (sourcemaps, ES2020) → dev/aipluginmin.js
 ```
 
 - Bundler: **esbuild** (not tsc). `tsconfig.json` is only for eslint type-checking + esbuild config reference.
@@ -17,7 +17,7 @@ npm run build-dev   # dev (sourcemaps, ES2020) → dev/aiplugin4.js
 
 ### Before every build
 
-1. **Backup old dist file** — `tools/build.js` auto-copies `dist/aiplugin4.js` to `dist-backups/aiplugin4-v{old-version}.js` before overwriting.
+1. **Backup old dist file** — `tools/build.js` auto-copies the configured output to `dist-backups/{artifact}-v{old-version}.js` before overwriting.
 2. The backup is automatic; `dist-backups/` can be gitignored.
 
 ## Version bumping

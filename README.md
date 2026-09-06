@@ -1,16 +1,16 @@
-# 🎲 AI骰娘 - SealDice AI插件
+# 🎲 AI骰娘Min - SealDice AI插件
 
 - 让你的骰娘活起来
 
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Version](https://img.shields.io/badge/Version-5.1.24-green)
+![Version](https://img.shields.io/badge/Version-5.1.38-green)
 
 ## 快速开始
 
 - 按[下载](#下载)提示下载插件；
 - 在海豹webui点击上传，重载，刷新浏览器页面；
 - 按[可用AI大模型开放平台列表](#可用ai大模型开放平台列表)一节或自行找到准备使用的大模型，记下url地址、你的API和模型名；
-- 在海豹webui-js插件-插件设置里找到aiplugin4，点击展开，将刚才记下的url地址、API Key填到对应配置项，模型名填入body的model字段；
+- 在海豹webui-js插件-插件设置里找到aiplugin4（为兼容旧配置保留的内部名称），点击展开，将刚才记下的url地址、API Key填到对应配置项，模型名填入body的model字段；
 - 在插件设置界面找到 非指令消息触发正则表达式 一项，修改为你希望的触发方式；找到 角色设定 一项，修改为你希望AI扮演的角色；
 - 对着你的骰娘输入你设定的 非指令消息触发正则表达式 的对应触发方式，你就可以看到骰娘的回复啦；
 - 如果没有回复，可以自行查看触发日志寻找可能问题，对照[常见问题处理](#常见问题处理)解决；
@@ -18,7 +18,7 @@
 
 ## 目录
 
-- [🎲 AI骰娘4 - SealDice AI插件](#-ai骰娘4---sealdice-ai插件)
+- [🎲 AI骰娘Min - SealDice AI插件](#-ai骰娘min---sealdice-ai插件)
   - [快速开始](#快速开始)
   - [目录](#目录)
   - [🌟 核心特性](#-核心特性)
@@ -58,7 +58,7 @@
 
 ## 🌟 核心特性
 
-AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于OpenAI兼容API开发。本插件深度整合了海豹骰子核心功能，提供以下核心能力：
+AI骰娘Min是一款面向TRPG玩家（吗？）的智能对话插件，基于OpenAI兼容API开发。本插件深度整合了海豹骰子核心功能，提供以下核心能力：
 
 - **智能对话**：支持上下文感知的AI对话
 - **多功能集成**：内置~50实用功能（属性检定、牌堆抽取、记忆管理、通用指令调用等），持续更新
@@ -81,17 +81,17 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 
 ### 下载
 
-- 通过GitHub下载最新稳定版：[下载链接](https://github.com/error2913/aiplugin4/releases/download)
+- 通过GitHub下载最新稳定版：[下载链接](https://github.com/NewWYoming/aipluginmin/releases)
 
 - 通过GitHub下载后自编译最新开发版：
   
   - 安装Node.js和npm
   - ```bash
-    git clone https://github.com/error2913/aiplugin4 # 克隆仓库
+    git clone https://github.com/NewWYoming/aipluginmin # 克隆仓库
     npm install # 安装依赖
     npm run build # 编译
     ```
-  - 在dist文件夹中可找到编译好的aiplugin4.js文件
+  - 在dist文件夹中可找到编译好的aipluginmin.js文件
 
 - 在QQ群中获取
 
@@ -251,12 +251,12 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 
 | 设置项         | 说明                                                                 |
 |:-----------:|:------------------------------------------------------------------:|
-| 流式输出        |  [流式输出](https://github.com/error2913/aiplugin4/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E6%B5%81%E5%BC%8F%E8%BE%93%E5%87%BA)                                                   |
-| 图片转base64   |   [图片转base64](https://github.com/error2913/aiplugin4/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E5%9B%BE%E7%89%87url%E8%BD%ACbase64)                                                         |
+| 流式输出        |  [流式输出](https://github.com/NewWYoming/aipluginmin/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E6%B5%81%E5%BC%8F%E8%BE%93%E5%87%BA)                                                   |
+| 图片转base64   |   [图片转base64](https://github.com/NewWYoming/aipluginmin/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E5%9B%BE%E7%89%87url%E8%BD%ACbase64)                                                         |
 | 联网搜索        |  [联网搜索](https://github.com/searxng/searxng) 有能力建议自己搭建，提供的公共服务不稳定，为AI提供联网搜索功能                                                     |
-| 网页读取        | [网页读取](https://github.com/error2913/aiplugin4/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E7%BD%91%E9%A1%B5url%E5%86%85%E5%AE%B9%E8%AF%BB%E5%8F%96) 有能力建议自己搭建，提供的公共服务不稳定，为AI提供网页详细内容获取功能                                                        |
-| 用量图表        |  [用量图表](https://github.com/error2913/aiplugin4/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E7%94%A8%E9%87%8F%E5%9B%BE%E8%A1%A8%E7%BB%98%E5%88%B6) AI的token使用情况图表生成后端                                                        |
-| md和html图片渲染 | [md和html图片渲染](https://github.com/error2913/aiplugin4/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/md%E5%92%8Chtml%E5%9B%BE%E7%89%87%E6%B8%B2%E6%9F%93) 有能力建议自己搭建，提供的公共服务不稳定，为AI提供将生成的markdown和html图片转为图片功能                                                       |
+| 网页读取        | [网页读取](https://github.com/NewWYoming/aipluginmin/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E7%BD%91%E9%A1%B5url%E5%86%85%E5%AE%B9%E8%AF%BB%E5%8F%96) 有能力建议自己搭建，提供的公共服务不稳定，为AI提供网页详细内容获取功能                                                        |
+| 用量图表        |  [用量图表](https://github.com/NewWYoming/aipluginmin/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/%E7%94%A8%E9%87%8F%E5%9B%BE%E8%A1%A8%E7%BB%98%E5%88%B6) AI的token使用情况图表生成后端                                                        |
+| md和html图片渲染 | [md和html图片渲染](https://github.com/NewWYoming/aipluginmin/tree/main/%E7%9B%B8%E5%85%B3%E5%90%8E%E7%AB%AF%E9%A1%B9%E7%9B%AE/md%E5%92%8Chtml%E5%9B%BE%E7%89%87%E6%B8%B2%E6%9F%93) 有能力建议自己搭建，提供的公共服务不稳定，为AI提供将生成的markdown和html图片转为图片功能                                                       |
 | Jina API Key     | 联网搜索和网页读取服务所需的 Jina API Key                                                       |
 
 
@@ -502,7 +502,7 @@ AI骰娘4是一款面向TRPG玩家（吗？）的智能对话插件，基于Open
 ### 项目结构
 
 ```
-aiplugin4/
+aipluginmin/
 ├── src/
 │   ├── config/        # 配置项相关 (11 files)
 │   │   ├── configManager.ts  # 配置总管理
@@ -643,8 +643,12 @@ aiplugin4/
 
 本项目采用MIT开源协议，欢迎二次开发。原创作者保留署名权。
 
+当前 fork 维护者：NewWYoming。aipluginmin 新增与修改部分版权归 NewWYoming 所有；上游原创作者署名保留如下。
+
 ```text
+Copyright 2023 sealdice
 Copyright 2024 错误、白鱼
+Copyright 2026 NewWYoming (aipluginmin 新增与修改部分)
 
 Permission is hereby granted...
 ```
