@@ -1,4 +1,5 @@
 import { AIManager } from "../AI/AI";
+import { UserNameManager } from "../AI/user_names";
 import { ConfigManager } from "../config/configManager";
 import { buildContent } from "../utils/utils_message";
 import { getCtxAndMsg } from "../utils/utils_seal";
@@ -61,7 +62,7 @@ export function registerContext() {
                 return `\n[function_call]: ${message.tool_calls.map((tool_call, index) => `${index + 1}. ${JSON.stringify(tool_call.function, null, 2)}`).join('\n')}`;
             }
 
-            return `[${message.role}]: ${buildContent(message)}`;
+            return `[${message.role}]: ${buildContent(message, UserNameManager.scopeFromContext(ctx))}`;
         }).join('\n');
 
         return { content: s, images: images };

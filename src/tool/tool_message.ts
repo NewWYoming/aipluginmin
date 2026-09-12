@@ -8,6 +8,7 @@ import { CQTYPESALLOW, faceMap } from "../config/config";
 import { deleteMsg, getGroupMemberInfo, getMsg, sendGroupForwardMsg, sendPrivateForwardMsg, netExists } from "../utils/utils_ob11";
 import { logger } from "../logger";
 import { Image } from "../AI/image";
+import { UserNameManager } from "../AI/user_names";
 
 export function registerMessage() {
     const toolSend = new Tool({
@@ -161,10 +162,11 @@ export function registerMessage() {
         const gid = ctx.group.groupId;
         const uid = `QQ:${result.sender.user_id}`;
         ({ ctx } = getCtxAndMsg(epId, uid, gid));
-        const name = ctx.player.name || '未知用户';
+        const scopeId = UserNameManager.scopeFromContext(ctx);
+        const name = UserNameManager.formatDisplayName(scopeId, uid, ctx.player.name || '未知用户');
         const prefix = isPrefix ? `<|from:${name}${showNumber ? `(${uid.replace(/^.+:/, '')})` : ``}|>` : '';
 
-        return { content: prefix + content, images: images };
+        return { content: prefix + UserNameManager.replaceReferences(scopeId, content), images: images };
     }
 
     const toolDel = new Tool({

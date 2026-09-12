@@ -4,6 +4,7 @@ import { logger } from "../logger";
 import { getCtxAndMsg } from "../utils/utils_seal";
 import { Tool } from "./tool";
 import { generateMergeText, knowledgeMM, searchOptions as SearchOptions } from "../AI/memory";
+import { UserNameManager } from "../AI/user_names";
 import { getRoleSetting } from "../utils/utils_message";
 
 export function registerMemory() {
@@ -307,7 +308,7 @@ export function registerMemory() {
             if (knowledgeMM.memoryIds.length === 0) return { content: `暂无知识库记忆`, images: [] };
             const memoryList = await knowledgeMM.search(query, options);
             const images = Array.from(new Set([].concat(...memoryList.map(m => m.images))));
-            return { content: knowledgeMM.buildKnowledgeMemory(memoryList) || '暂无知识库记忆', images };
+            return { content: knowledgeMM.buildKnowledgeMemory(memoryList, UserNameManager.scopeFromContext(ctx)) || '暂无知识库记忆', images };
         }
 
         // Memory path: scope enforced by context
@@ -339,7 +340,7 @@ export function registerMemory() {
         const memoryList = await targetAi.memory.search(query, options);
         logger.info(`LLM调用search_memory: scope=${ctx.isPrivate ? 'private' : 'group'}, query="${query}", topK=${topK}, 结果=${memoryList.length}条`);
         const images = Array.from(new Set([].concat(...memoryList.map(m => m.images))));
-        return { content: targetAi.memory.buildMemory(si, memoryList) || '暂无记忆', images };
+        return { content: targetAi.memory.buildMemory(si, memoryList, UserNameManager.scopeFromContext(ctx)) || '暂无记忆', images };
     }
 
     const toolClear = new Tool({

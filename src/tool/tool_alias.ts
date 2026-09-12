@@ -1,4 +1,5 @@
 import { logger } from "../logger";
+import { UserNameManager } from "../AI/user_names";
 import { ConfigManager } from "../config/configManager";
 import { normalizeName } from "../utils/utils";
 import { Tool } from "./tool";
@@ -54,6 +55,11 @@ export function registerAlias() {
                 return { content: `别名"${alias}"已在"${user_name}"的别名列表中，无需重复添加`, images: [] };
             }
 
+            const result = UserNameManager.addAlias(UserNameManager.scopeFromContext(ctx), uid, alias, true, ctx);
+            if (!result.ok) {
+                if (result.reason === 'conflict') ai.context.markAmbiguousName(alias);
+                return { content: `别名"${alias}"与当前会话中的其他用户冲突，未执行绑定`, images: [] };
+            }
             ai.context.registerAlias(uid, alias);
             logger.info(`edit_alias: add — uid=${uid}, alias='${alias}' → '${user_name}'`);
             return { content: `已将别名"${alias}"绑定到用户"${user_name}"`, images: [] };
@@ -68,7 +74,8 @@ export function registerAlias() {
             // 归一化查找并删除别名
             const idx = aliasEntry.names.findIndex(n => normalizeName(n) === normalizeName(alias));
             if (idx === -1) {
-                return { content: `未找到别名"${alias}"，该用户当前没有此别名`, images: [] };
+                const result = UserNameManager.removeAlias(UserNameManager.scopeFromContext(ctx), uid, alias);
+                return { content: result.ok ? `已从用户"${user_name}"的别名列表中移除"${alias}"` : `未找到别名"${alias}"，该用户当前没有此别名`, images: [] };
             }
             const removed = aliasEntry.names[idx];
             aliasEntry.names.splice(idx, 1);
@@ -78,6 +85,8 @@ export function registerAlias() {
             if (aliasEntry.names.length === 0) {
                 delete ai.context.aliases[uid];
             }
+
+            UserNameManager.removeAlias(UserNameManager.scopeFromContext(ctx), uid, alias);
 
             logger.info(`edit_alias: delete — uid=${uid}, alias='${alias}' removed from '${user_name}'`);
             return { content: `已从用户"${user_name}"的别名列表中移除"${alias}"`, images: [] };

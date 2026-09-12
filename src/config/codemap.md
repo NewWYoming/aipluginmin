@@ -27,7 +27,7 @@ Each feature area has a dedicated file with a class that follows a uniform inter
 | `config_reply.ts` | `ReplyConfig` | `aiplugin4_4:回复` | Reply filtering, anti-repeat, regex processing |
 | `config_image.ts` | `ImageConfig` | `aiplugin4_5:图片` | Image recognition, storage, sending |
 | `config_backend.ts` | `BackendConfig` | `aiplugin4_6:后端` | External service URLs (stream, search, render, Jina API Key), TTS provider routing (DashScope/CosyVoice) |
-| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory (memoryLimit, memoryShowNumber, memoryShowTemplate), knowledge base, impressions (impressionMaxLength, cleanupInactiveDays), task reminder polish (任务提醒润色提示); vector/embedding config removed |
+| `config_memory.ts` | `MemoryConfig` | `aiplugin4_7:记忆` | Long-term memory (memoryLimit, memoryShowNumber, memoryShowTemplate), knowledge base, impressions (impressionMaxTokens, impressionFailureNotifyEnabled, cleanupInactiveDays), task reminder polish (任务提醒润色提示); vector/embedding config removed |
 | `sample.ts` | `SampleConfig` | `aiplugin4_0:示例` | Reference example (disabled in production) |
 
 Each class has:
@@ -75,7 +75,7 @@ Plugin startup (src/index.ts → main())
        ├─ ReplyConfig.register()         → creates "aiplugin4_4:回复" ext, registers ~6 keys
        ├─ ImageConfig.register()         → creates "aiplugin4_5:图片" ext, registers ~9 keys
        ├─ BackendConfig.register()       → creates "aiplugin4_6:后端" ext, registers 12 keys (added Jina API Key + TTS config: ttsModel, ttsProvider, ttsVoice, ttsApiKey, ttsEnabled, ttsExtraBody)
-       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers 13 keys (memoryLimit, memoryShowNumber, memoryShowTemplate, memorySingleShowTemplate, knowledgeMemoryShowNumber, impressionMaxLength, cleanupInactiveDays, 任务提醒润色提示; 5 vector keys removed)
+       ├─ MemoryConfig.register()        → creates "aiplugin4_7:记忆" ext, registers 14 keys (memoryLimit, memoryShowNumber, memoryShowTemplate, memorySingleShowTemplate, knowledgeMemoryShowNumber, impressionMaxTokens, impressionFailureNotifyEnabled, cleanupInactiveDays, 任务提醒润色提示; 5 vector keys removed)
        └─ SampleConfig.register()        → creates "aiplugin4_0:示例" ext, registers 1 key
 
 Runtime access (any module):
@@ -92,7 +92,7 @@ Runtime access (any module):
 ### `config.ts` — Constants
 
 This file is not a config class. It exports plain constants used throughout the plugin:
-- `VERSION` (currently `5.1.38`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata. `NAME` remains `aiplugin4` for configuration compatibility.
+- `VERSION` (currently `5.1.44`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata. `NAME` remains `aiplugin4` for configuration compatibility.
 - `CQTYPESALLOW` — allowed CQ message types.
 - `PRIVILEGELEVELMAP` — role-to-permission-level mapping.
 - `HELPMAP` — help text definitions for commands.

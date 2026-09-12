@@ -92,8 +92,8 @@ When a code review or investigation surfaces **multiple bugs/issues** (5+), do n
 ## SealDice API
 
 - **`types/seal.d.ts`** declares the SealDice runtime types (provided globally, no import needed). The file is **incomplete**.
-- **`E:\documents\project\bot\sealdocu.md`** is the authoritative API reference. Check this document first when unsure about any SealDice API signature.
-- **Local SealDice core source: `E:\documents\project\bot\sealdice-core`** (Go source; JS extension bindings in `dice/dice_jsvm.go`). This is the authoritative source for runtime semantics (e.g. `seal.vars` variable scopes like `$g`=group scope).
+- Before researching external SealDice behavior, ensure the reference checkout exists at `..\Reference\sealdice-core`; if it is absent, clone `https://github.com/sealdice/sealdice-core` there. Keep future reference projects under the sibling `..\Reference\` directory rather than embedding machine-specific paths in project instructions.
+- **`..\Reference\sealdice-core`** is the local SealDice core source (Go source; JS extension bindings in `dice/dice_jsvm.go`) and is the authoritative source for runtime semantics (e.g. `seal.vars` variable scopes like `$g`=group scope). Use its checked-out documentation/source when available; otherwise use the online manual below.
 - For API signatures, check the online manual: `https://docs.sealdice.com/advanced/js_api_list.html`
 - Key patterns: plugin registers via `seal.ext.new()`, configs via `seal.ext.registerStringConfig()` / `seal.ext.getStringConfig()`, hooks via `ext.onNotCommandReceived` / `ext.onCommandReceived` / `ext.onMessageSend`.
 

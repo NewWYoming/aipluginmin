@@ -3,6 +3,7 @@ import { Message } from "../AI/context";
 import { ConfigManager } from "../config/configManager";
 import { fmtDate } from "./utils_string";
 import { knowledgeMM } from "../AI/memory";
+import { UserNameManager } from "../AI/user_names";
 
 export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<Message> {
     const { systemMessageTemplate, isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;
@@ -32,7 +33,13 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
     }
 
     // 知识库
-    const knowledgePrompt = await knowledgeMM.buildKnowledgeMemoryPrompt(roleIndex, text, ui, gi);
+    const knowledgePrompt = await knowledgeMM.buildKnowledgeMemoryPrompt(
+        roleIndex,
+        text,
+        ui,
+        gi,
+        UserNameManager.scopeFromContext(ctx),
+    );
     // 记忆
     const memoryPrompt = isMemory ? await ai.memory.buildMemoryPrompt(ctx, ai.context, text, ui, gi) : '';
     // 印象层
@@ -42,7 +49,7 @@ export async function buildSystemMessage(ctx: seal.MsgContext, ai: AI): Promise<
         "平台": ctx.endPoint.platform,
         "私聊": ctx.isPrivate,
         "展示号码": showNumber,
-        "用户名称": ctx.player.name,
+        "用户名称": UserNameManager.formatDisplayName(UserNameManager.scopeFromContext(ctx), ctx.player.userId, ctx.player.name),
         "用户号码": ctx.player.userId.replace(/^.+:/, ''),
         "群聊名称": ctx.group.groupName,
         "群聊号码": ctx.group.groupId.replace(/^.+:/, ''),
@@ -143,6 +150,7 @@ function buildContextMessages(systemMessage: Message, messages: Message[]): Mess
 
 export async function handleMessages(ctx: seal.MsgContext, ai: AI) {
     const { isMerge } = ConfigManager.message;
+    const scopeId = UserNameManager.scopeFromContext(ctx);
 
     const systemMessage = await buildSystemMessage(ctx, ai);
     const samplesMessages = buildSamplesMessages(ctx);
@@ -189,11 +197,11 @@ export async function handleMessages(ctx: seal.MsgContext, ai: AI) {
         const message = messages[i];
 
         if (isMerge && message.role === last_role && message.role !== 'tool') {
-            processedMessages[processedMessages.length - 1].content += '\f' + buildContent(message);
+            processedMessages[processedMessages.length - 1].content += '\f' + buildContent(message, scopeId);
         } else {
             processedMessages.push({
                 role: message.role,
-                content: buildContent(message),
+                content: buildContent(message, scopeId),
                 tool_calls: message?.tool_calls,
                 tool_call_id: message?.tool_call_id
             });
@@ -206,17 +214,18 @@ export async function handleMessages(ctx: seal.MsgContext, ai: AI) {
 
 
 
-export function buildContent(message: Message): string {
+export function buildContent(message: Message, scopeId: string = ''): string {
     const { isPrefix, showNumber, showMsgId, showTime } = ConfigManager.message;
+    const displayName = UserNameManager.formatDisplayName(scopeId, message.uid, message.name);
     const prefix = (isPrefix && message.name) ? (
         message.name.startsWith('_') ?
             `<|${message.name}|>` :
-            `<|from:${message.name}${showNumber ? `(${message.uid.replace(/^.+:/, '')})` : ``}|>`
+            `<|from:${displayName}${showNumber ? `(${message.uid.replace(/^.+:/, '')})` : ``}|>`
     ) : '';
     const content = message.msgArray.map(m =>
         ((showMsgId && m.msgId) ? `<|msg_id:${m.msgId}|>` : '') +
         (showTime ? `<|time:${fmtDate(m.time, ConfigManager.message.utcOffset)}|>` : '') +
-        m.content
+        (message.role === 'user' ? UserNameManager.replaceReferences(scopeId, m.content) : m.content)
     ).join('\f');
     return prefix + content;
 }

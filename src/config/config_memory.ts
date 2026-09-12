@@ -53,7 +53,8 @@ ID:上面是分割符
         // 印象层配置
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大观察消息数", 10, "连续收集多少条用户消息后自动生成印象");
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最长天数", 3, "印象超过此天数未更新则触发刷新");
-        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·最大长度", 80, "印象文字最大字符数");
+        seal.ext.registerIntConfig(MemoryConfig.ext, "印象·请求最大Token", 1000, "印象更新请求的最大输出 token；连续截断三次后临时扩大恢复预算");
+        seal.ext.registerBoolConfig(MemoryConfig.ext, "印象·失败通知SealDice通知列表", true, "印象更新连续失败后是否通知 SealDice 通知列表（包括 master 和其他配置的通知途径）");
         seal.ext.registerIntConfig(MemoryConfig.ext, "印象·清理未活跃天数", 30, "超过此天数未发言的用户印象将被清理");
 
         seal.ext.registerStringConfig(MemoryConfig.ext, '任务提醒润色提示',
@@ -74,7 +75,8 @@ ID:上面是分割符
             memorySingleShowTemplate: ConfigManager.getHandlebarsTemplateConfig(MemoryConfig.ext, "单条长期记忆展示模板"),
             maxObservedMessages: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大观察消息数"),
             impressionMaxAge: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最长天数"),
-            impressionMaxLength: seal.ext.getIntConfig(MemoryConfig.ext, "印象·最大长度"),
+            impressionMaxTokens: seal.ext.getIntConfig(MemoryConfig.ext, "印象·请求最大Token"),
+            impressionFailureNotifyEnabled: seal.ext.getBoolConfig(MemoryConfig.ext, "印象·失败通知SealDice通知列表"),
             cleanupInactiveDays: seal.ext.getIntConfig(MemoryConfig.ext, "印象·清理未活跃天数"),
             taskReminderPolish: seal.ext.getStringConfig(MemoryConfig.ext, '任务提醒润色提示'),
         }

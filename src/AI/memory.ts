@@ -6,6 +6,7 @@ import { AIClient } from "../service/AIClient";
 import { logger } from "../logger";
 import { fmtDate, fixJsonString } from "../utils/utils_string";
 import { Image, ImageManager } from "./image";
+import { UserNameManager } from "./user_names";
 
 export interface searchOptions {
     topK: number;
@@ -137,6 +138,8 @@ export interface UserObservation {
   lastSpeak: number;
   /** 印象 LLM 失败冷却时间戳（秒）；失败不丢观察，冷却后整批重试。随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），最长 5 分钟，无害 */
   impressionFailAt?: number;
+  /** 当前观察批次已达到重试上限；收到新消息后解除，避免同一批次无限请求。 */
+  impressionRetryBlocked?: boolean;
 }
 
 export interface Impression {
@@ -591,8 +594,8 @@ export class MemoryManager {
         });
     }
 
-    /** 为指定用户更新印象（Tier 2）；rawMessages 可传调用方快照，异步期间新消息不受影响 */
-    async updateImpression(uid: string, rawMessages?: string[]): Promise<boolean> {
+    /** 为指定用户更新印象（Tier 2）；rawMessages 可传调用方快照，异步期间新消息不受影响。 */
+    async updateImpression(uid: string, rawMessages?: string[], notifyCtx?: seal.MsgContext): Promise<boolean> {
       const obs = this.observations[uid];
       if (!obs) return false;
       const msgs = rawMessages || obs.rawMessages;
@@ -600,47 +603,98 @@ export class MemoryManager {
 
       const current = this.impressions[uid];
       const oldImpression = current?.text || '无';
-      const now = Math.floor(Date.now() / 1000);
-
-      const prompt = '你正在根据最近的观察，更新对某个群友的简短印象。\n当前印象: ' + oldImpression + '\n最近观察:\n' +
+      const config = ConfigManager.memory;
+      const baseMaxTokens = Math.max(1, config.impressionMaxTokens || 1000);
+      const boostedMaxTokens = Math.ceil(baseMaxTokens * 1.5);
+      const basePrompt = '你正在根据最近的观察，更新对某个群友的简短印象。\n当前印象: ' + oldImpression + '\n最近观察:\n' +
         msgs.map(function(m, i) { return (i + 1) + '. ' + m; }).join('\n') +
-        '\n\n请用 ≤80 字更新印象。只描述性格特点、说话风格、行为习惯。不要描述具体事件。如果初次观察，给出初次印象。\n返回 JSON: {"impression": "印象文字"}';
+        '\n\n请用一两句简短内容更新印象。只描述性格特点、说话风格、行为习惯。不要描述具体事件。如果初次观察，给出初次印象。' +
+        '\n只返回一个完整 JSON 对象，不要 Markdown、解释或额外文本。格式: {"impression": "印象文字"}';
+      const retryPrompt = '\n\n上一轮输出被截断或格式无效。请简短输出：只返回一个完整 JSON 对象，impression 使用一句短句，不要前言、解释、Markdown 或额外字段。';
+
+      let prompt = basePrompt;
+      let maxTokens = baseMaxTokens;
+      let truncationCount = 0;
+      let lastFailure = '未知错误';
+
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          // 前三次截断维持用户设定上限；累计三次截断后，第四次才临时使用 1.5 倍上限。
+          maxTokens = attempt === 4 && truncationCount >= 3 ? boostedMaxTokens : baseMaxTokens;
+          const requestConfig = ConfigManager.request;
+          const memoryModel = String(requestConfig.memoryModel || '').toLowerCase();
+          const isGemini3Model = /gemini-3(?:[.-]|$)/.test(memoryModel);
+          const client = new AIClient({
+            apiProvider: requestConfig.apiProvider,
+            url: requestConfig.url,
+            apiKey: requestConfig.apiKey,
+            model: requestConfig.memoryModel,
+            maxTokens,
+            timeout: 30000,
+            thinkingEnabled: false,
+            reasoningEffort: 'low',
+            toolThinkingEnabled: false,
+            toolReasoningEffort: 'minimal',
+            // Gemini 3 无法关闭 thinking；OpenAI 兼容接口不设置 reasoning_effort 时默认使用 medium。
+            extraBody: requestConfig.apiProvider === 'openai-compatible' && isGemini3Model
+              ? { reasoning_effort: 'low' }
+              : {},
+          });
+
+          const response = await client.chat(
+            [{ role: 'user', content: prompt }],
+            null, 'none',
+          );
+          const finishReason = String(response.finish_reason || '').toLowerCase();
+          const isTruncated = finishReason === 'length' || finishReason === 'max_tokens' || finishReason === 'max_output_tokens';
+
+          if (isTruncated) {
+            truncationCount++;
+            lastFailure = `finish_reason=${finishReason}`;
+            logger.warning(`印象更新输出被截断 (${uid})：第${truncationCount}次，maxTokens=${maxTokens}`);
+          } else if (finishReason !== 'stop' && finishReason !== 'end_turn') {
+            lastFailure = `finish_reason=${finishReason || 'unknown'}`;
+            logger.warning(`印象更新结束原因不可接受 (${uid})：${lastFailure}`);
+          } else {
+            const rawContent = String(response.content || '').trim();
+            const fencedContent = rawContent.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1]?.trim() || rawContent;
+            const fixedContent = fixJsonString(fencedContent);
+            const parsed = JSON.parse(fixedContent || fencedContent);
+            const impression = typeof parsed?.impression === 'string' ? parsed.impression.trim() : '';
+            if (!impression) throw new Error('响应缺少非空 impression 字段');
+
+            this.impressions[uid] = {
+              text: impression,
+              updatedAt: Math.floor(Date.now() / 1000)
+            };
+            logger.info('印象更新: ' + uid + ' → ' + this.impressions[uid].text);
+            return true;
+          }
+        } catch (e: any) {
+          lastFailure = e?.message || String(e);
+          logger.error(`印象更新第${attempt}次失败 (${uid}): ${lastFailure}`);
+        }
+
+        if (attempt >= 4) break;
+        if (truncationCount === 3) logger.warning(`印象更新连续三次截断，下一次临时提高 maxTokens 至 ${boostedMaxTokens} (${uid})`);
+        prompt = basePrompt + retryPrompt;
+      }
+
+      logger.error(`印象更新最终失败 (${uid})，已停止本轮请求：${lastFailure}`);
+      await this.notifyImpressionFailure(notifyCtx, uid, lastFailure);
+      return false;
+    }
+
+    /** 按配置通知 SealDice 通知列表。 */
+    private async notifyImpressionFailure(ctx: seal.MsgContext, uid: string, reason: string): Promise<void> {
+      if (!ConfigManager.memory.impressionFailureNotifyEnabled) return;
+
+      const text = `印象更新连续失败，已停止本轮请求。用户: ${uid}\n原因: ${reason}`;
 
       try {
-        const requestConfig = ConfigManager.request;
-        const client = new AIClient({
-          apiProvider: requestConfig.apiProvider,
-          url: requestConfig.url,
-          apiKey: requestConfig.apiKey,
-          model: requestConfig.memoryModel,
-          maxTokens: 256,
-          timeout: 30000,
-          thinkingEnabled: false,
-          reasoningEffort: 'low',
-          toolThinkingEnabled: false,
-          toolReasoningEffort: 'minimal',
-          extraBody: {},
-        });
-
-        const response = await client.chat(
-          [{ role: 'user', content: prompt }],
-          null, 'none',
-        );
-
-        const content = response.content || '';
-        const parsed = JSON.parse(content);
-        if (parsed?.impression && typeof parsed.impression === 'string') {
-          const maxLen = ConfigManager.memory.impressionMaxLength || 80;
-          this.impressions[uid] = {
-            text: parsed.impression.slice(0, maxLen),
-            updatedAt: now
-          };
-          logger.info('印象更新: ' + uid + ' → ' + this.impressions[uid].text);
-        }
-        return true;
+        if (ctx?.notice) ctx.notice(text);
       } catch (e: any) {
-        logger.error('印象更新失败 (' + uid + '): ' + (e?.message || e));
-        return false;
+        logger.error(`印象失败通知列表发送异常: ${e?.message || e}`);
       }
     }
 
@@ -658,7 +712,7 @@ export class MemoryManager {
         const imp = this.impressions[uid];
         if (!imp || !imp.text) continue;  // 空印象跳过
 
-        const name = msg.name || '未知用户';
+        const name = UserNameManager.formatDisplayName(UserNameManager.scopeFromContext(ctx), uid, msg.name || '未知用户');
         lines.push(name + ': ' + imp.text);
       }
 
@@ -712,7 +766,7 @@ export class MemoryManager {
         return this.buildMemory(si, latestMemoryList) + `\n当前页码: ${p}/${Math.ceil(this.memoryList.length / 5)}`;
     }
 
-    buildMemory(si: SessionInfo, ml: Memory[]): string {
+    buildMemory(si: SessionInfo, ml: Memory[], nameScope: string = si.id): string {
         if (ml.length === 0) return '';
         const { showNumber } = ConfigManager.message;
         const { memoryShowTemplate, memorySingleShowTemplate } = ConfigManager.memory;
@@ -732,7 +786,7 @@ export class MemoryManager {
                         "展示号码": showNumber,
                         "群聊名称": m.sessionInfo.name,
                         "群聊号码": m.sessionInfo.id,
-                        "相关用户": m.userList.map(u => u.name + (showNumber ? `(${u.id.replace(/^.+:/, '')})` : '')).join(';'),
+                        "相关用户": m.userList.map(u => UserNameManager.formatDisplayName(nameScope, u.id, u.name) + (showNumber ? `(${u.id.replace(/^.+:/, '')})` : '')).join(';'),
                         "相关群聊": m.groupList.map(g => g.name + (showNumber ? `(${g.id.replace(/^.+:/, '')})` : '')).join(';'),
                         "关键词": m.keywords.join(';'),
                         "记忆内容": m.text
@@ -743,7 +797,7 @@ export class MemoryManager {
         return memoryShowTemplate({
             "私聊": si.isPrivate,
             "展示号码": showNumber,
-            "用户名称": si.name,
+            "用户名称": si.isPrivate ? UserNameManager.formatDisplayName(nameScope, si.id, si.name) : si.name,
             "用户号码": si.id.replace(/^.+:/, ''),
             "群聊名称": si.name,
             "群聊号码": si.id.replace(/^.+:/, ''),
@@ -753,6 +807,7 @@ export class MemoryManager {
 
     async buildMemoryPrompt(ctx: seal.MsgContext, context: Context, text: string, ui: UserInfo, gi: GroupInfo): Promise<string> {
         const { memoryShowNumber } = ConfigManager.memory;
+        const nameScope = UserNameManager.scopeFromContext(ctx);
         const currentScope = ctx.isPrivate ? 'private' : 'group';
         const currentSessionId = ctx.isPrivate ? ctx.player.userId : ctx.group.groupId;
 
@@ -763,7 +818,8 @@ export class MemoryManager {
         const scoredBot = await botAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, botFiltered);
         let s = botAI.memory.buildMemory(
             { isPrivate: true, id: ctx.endPoint.userId, name: seal.formatTmpl(ctx, '核心:骰子名字') },
-            scoredBot
+            scoredBot,
+            nameScope,
         );
 
         if (ctx.isPrivate) {
@@ -773,7 +829,8 @@ export class MemoryManager {
             const scored = await userAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, userFiltered);
             return s + userAI.memory.buildMemory(
                 { isPrivate: true, id: ctx.player.userId, name: ctx.player.name },
-                scored
+                scored,
+                nameScope,
             );
         } else {
             // Group chat: group memories ONLY. No per-user private memory injection!
@@ -782,7 +839,8 @@ export class MemoryManager {
             const scored = await groupAI.memory.getRelevantMemories(text, ui, gi, memoryShowNumber, groupFiltered);
             return s + groupAI.memory.buildMemory(
                 { isPrivate: false, id: ctx.group.groupId, name: ctx.group.groupName },
-                scored
+                scored,
+                nameScope,
             );
         }
     }
@@ -816,7 +874,7 @@ export async function generateMergeText(memoryList: Memory[]): Promise<{ text: s
     if (memoryList.length === 0) return null;
 
     const listText = memoryList.map((m, i) => {
-        return `${i + 1}. [${m.id}] 关键词:${m.keywords.join('、') || '无'} 相关用户:${m.userList.map(u => u.name).join('、') || '无'}\n   内容: ${m.text}`;
+        return `${i + 1}. [${m.id}] 关键词:${m.keywords.join('、') || '无'} 相关用户:${m.userList.map(u => UserNameManager.formatDisplayName(m.sessionInfo?.id || '', u.id, u.name)).join('、') || '无'}\n   内容: ${m.text}`;
     }).join('\n');
     const prompt = '合并以下多条记忆为一条记忆。要求:\n' +
         '1. 保留全部事实，不得遗漏任何重要信息\n' +
@@ -1002,7 +1060,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
         this.save();
     }
 
-    buildKnowledgeMemory(memoryList: Memory[]) {
+    buildKnowledgeMemory(memoryList: Memory[], nameScope: string = '') {
         const { showNumber } = ConfigManager.message;
         const { knowledgeMemorySingleShowTemplate } = ConfigManager.memory;
         if (memoryList.length === 0) return '';
@@ -1016,7 +1074,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
                     return knowledgeMemorySingleShowTemplate({
                         "序号": i + 1,
                         "记忆ID": m.id,
-                        "用户列表": m.userList.map(u => u.name + (showNumber ? `(${u.id.replace(/^.+:/, '')})` : '')).join(';'),
+                        "用户列表": m.userList.map(u => UserNameManager.formatDisplayName(nameScope, u.id, u.name) + (showNumber ? `(${u.id.replace(/^.+:/, '')})` : '')).join(';'),
                         "群聊列表": m.groupList.map(g => g.name + (showNumber ? `(${g.id.replace(/^.+:/, '')})` : '')).join(';'),
                         "关键词": m.keywords.join(';'),
                         "记忆内容": m.text
@@ -1027,7 +1085,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
         return prompt;
     }
 
-    async buildKnowledgeMemoryPrompt(roleIndex: number, text: string, ui: UserInfo, gi: GroupInfo): Promise<string> {
+    async buildKnowledgeMemoryPrompt(roleIndex: number, text: string, ui: UserInfo, gi: GroupInfo, nameScope: string = ''): Promise<string> {
         await this.updateKnowledgeMemory(roleIndex);
         if (this.memoryIds.length === 0) return '';
 
@@ -1041,7 +1099,7 @@ export class KnowledgeMemoryManager extends MemoryManager {
             method: 'score'
         });
 
-        return this.buildKnowledgeMemory(memoryList);
+        return this.buildKnowledgeMemory(memoryList, nameScope);
     }
 }
 

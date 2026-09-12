@@ -23,7 +23,7 @@
 | `src/task.ts` | Task system: TaskManager with CRUD (add/get/update/delete), cron scheduling (daily 0:00 scan), TimerManager alarm integration for deadline/periodic reminders | |
 | `src/tool/` | AI function-calling tools: ~44 tools across COC/TRPG, memory, alias, image, messaging, utility, task domains | [📄](src/tool/codemap.md) |
 | `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management, `.ai task` subcommands (add/list/update/delete) | [📄](src/cmd/codemap.md) |
-| `src/cmd/sub_cmd/` | Individual subcommand implementations (17 commands) | [📄](src/cmd/sub_cmd/codemap.md) |
+| `src/cmd/sub_cmd/` | Individual subcommand implementations (18 commands) | [📄](src/cmd/sub_cmd/codemap.md) |
 | `src/utils/` | Shared utilities: string parsing, message formatting, OB11 bridge, SealDice helpers | [📄](src/utils/codemap.md) |
 
 ## Architecture Overview

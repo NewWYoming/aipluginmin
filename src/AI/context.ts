@@ -7,6 +7,7 @@ import { AI, AIManager, GroupInfo, UserInfo } from "./AI";
 import { logger } from "../logger";
 import { netExists, getFriendList, getGroupList, getGroupMemberInfo, getGroupMemberList, getStrangerInfo } from "../utils/utils_ob11";
 import { normalizeName, revive } from "../utils/utils";
+import { UserNameManager } from "./user_names";
 
 export interface MessageInfo {
     msgId: string;
@@ -27,11 +28,13 @@ export interface Message {
 }
 
 export class Context {
-    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'autoNameMod', 'aliases'];
+    static validKeys: (keyof Context)[] = ['messages', 'ignoreList', 'autoNameMod', 'aliases', 'ambiguousNames'];
     messages: Message[];
     ignoreList: string[];
     autoNameMod: number; // 自动修改上下文里的名字，0:不自动修改，1:修改为昵称，2:修改为群名片
     aliases: { [uid: string]: { names: string[]; lastUsed: { [name: string]: number } } };
+    /** 当前会话内被判定为多用户冲突的名称；命中时拒绝旧别名链路的猜测。 */
+    ambiguousNames: string[];
     /** 印象更新 in-flight 集合，防止 fire-and-forget 期间重复触发（运行时字段，不参与持久化） */
     private impressionInFlight = new Set<string>();
 
@@ -43,6 +46,7 @@ export class Context {
         this.messages = [];
         this.ignoreList = [];
         this.aliases = {};
+        this.ambiguousNames = [];
         this.autoNameMod = 0;
         this.lastReply = '';
         this.counter = 0;
@@ -125,7 +129,9 @@ export class Context {
 
         // 注册用户别名（UID → 所有名称变体，归一化去重）
         if (role === 'user' && uid) {
-            this.registerAlias(uid, name);
+            const observed = UserNameManager.addAlias(UserNameManager.scopeFromContext(ctx), uid, name, true, ctx);
+            if (observed.ok) this.registerAlias(uid, name);
+            else if (observed.reason === 'conflict') this.markAmbiguousName(name);
         }
 
         if (length !== 0 && messages[length - 1].uid === uid && !/<[\|│｜]?function(?:_call)?>/.test(content)) {
@@ -161,6 +167,11 @@ export class Context {
             }
             const obs = ai.memory.observations[uid];
             obs.rawMessages.push(content);
+            // 新消息开启新的失败批次，解除上一批次达到上限后的阻断。
+            if (obs.impressionRetryBlocked) {
+                obs.impressionRetryBlocked = false;
+                obs.impressionFailAt = 0;
+            }
             // 硬上限 = maxObservedMessages * 3，超出丢弃最旧
             const cap = (ConfigManager.memory.maxObservedMessages || 10) * 3;
             while (obs.rawMessages.length > cap) {
@@ -176,25 +187,29 @@ export class Context {
             const imp = ai.memory.impressions[uid];
             const staleImpression = imp && imp.text && (now - imp.updatedAt) > maxAge * 86400;
 
-            if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid) && now >= (obs.impressionFailAt || 0)) {
+            if ((needUpdate || (staleImpression && obs.rawMessages.length > 0)) && !this.impressionInFlight.has(uid) && !obs.impressionRetryBlocked && now >= (obs.impressionFailAt || 0)) {
                 // fire-and-forget + 防重入，不阻塞消息主链路（内部最长 30s LLM 调用）；失败冷却期内不触发
                 this.impressionInFlight.add(uid);
                 const batch = obs.rawMessages.slice();
-                ai.memory.updateImpression(uid, batch).then((success) => {
+                ai.memory.updateImpression(uid, batch, ctx).then((success) => {
                     this.impressionInFlight.delete(uid);
                     if (success) {
                         // 只移除本次已消费的批次，异步期间新增的消息保留
                         obs.rawMessages.splice(0, batch.length);
                         obs.impressionFailAt = 0;  // 成功清除冷却
+                        obs.impressionRetryBlocked = false;
                     } else {
-                        // 失败不丢观察——5 分钟冷却后整批重试（数据损失优先）
-                        // impressionFailAt 随 observations 整对象拷贝落盘（validKeys 含 observations，revive 无深度校验），冷却最长 5 分钟，无害
-                        if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;  // 数据不足(<3)不设冷却，仍不 shift
+                        // 失败不丢观察；本轮已在 updateImpression 内达到上限，阻止同一批次继续请求。
+                        obs.impressionFailAt = Math.floor(Date.now() / 1000) + 300;
+                        obs.impressionRetryBlocked = obs.rawMessages.length <= batch.length;
                     }
+                    AIManager.saveAI(ai.id);
                 }).catch(() => {
                     this.impressionInFlight.delete(uid);
                     // 异常同样不丢观察，冷却后重试
-                    if (obs.rawMessages.length >= 3) obs.impressionFailAt = now + 300;
+                    obs.impressionFailAt = Math.floor(Date.now() / 1000) + 300;
+                    obs.impressionRetryBlocked = obs.rawMessages.length <= batch.length;
+                    AIManager.saveAI(ai.id);
                 });
             }
         }
@@ -300,6 +315,35 @@ export class Context {
         }
     }
 
+    private nameKey(name: string): string {
+        return normalizeName(name) || String(name || '').trim();
+    }
+
+    markAmbiguousName(name: string): void {
+        const key = this.nameKey(name);
+        if (key && !this.ambiguousNames.includes(key)) this.ambiguousNames.push(key);
+    }
+
+    isAmbiguousName(name: string): boolean {
+        const key = this.nameKey(name);
+        return Boolean(key && this.ambiguousNames.includes(key));
+    }
+
+    removeAlias(uid: string, name: string): boolean {
+        const alias = this.aliases[uid];
+        if (!alias) return false;
+        const index = alias.names.findIndex(item => normalizeName(item) === normalizeName(name) || item === name);
+        if (index < 0) return false;
+        const removed = alias.names.splice(index, 1)[0];
+        delete alias.lastUsed[removed];
+        if (alias.names.length === 0) delete this.aliases[uid];
+        return true;
+    }
+
+    clearAliases(uid: string): void {
+        delete this.aliases[uid];
+    }
+
     async findUserInfo(ctx: seal.MsgContext, name: string | number, findInFriendList: boolean = false): Promise<UserInfo> {
         name = String(name).trim();
         if (!name) return null;
@@ -308,6 +352,10 @@ export class Context {
         const match = name.match(/^<([^>]+?)>(?:[\(（]\d+[\)）])?$|(.+?)[\(（]\d+[\)）]$/);
         if (match) name = match[1] || match[2];
         const nn = normalizeName(name);
+        if (this.isAmbiguousName(name)) {
+            logger.warning(`名称<${name}>在当前会话中存在冲突，拒绝自动解析`);
+            return null;
+        }
         if (!nn) {
             // 纯 emoji/符号昵称：归一化后为空串，走原始精确匹配兜底（不做模糊匹配，防空串互相全等误配）
             const rawNow = Math.floor(Date.now() / 1000);
@@ -355,6 +403,18 @@ export class Context {
             }
             logger.warning(`未找到用户<${name}>（归一化后为空）`);
             return null;
+        }
+
+        // 优先使用跨会话的手动名称映射；同名映射不确定时拒绝自动选择，避免误认。
+        const globalMatches = UserNameManager.find(UserNameManager.scopeFromContext(ctx), name);
+        if (globalMatches.length > 1) {
+            logger.warning(`名称<${name}>对应多个用户，拒绝自动解析`);
+            return null;
+        }
+        if (globalMatches.length === 1) {
+            const match = globalMatches[0];
+            if (this.ignoreList.includes(match.uid)) return null;
+            return { isPrivate: true, id: match.uid, name: match.matchedName };
         }
 
         // 纯数字 QQ 分支（用原始 name，防全角数字误判；\d 不含全角天然排除）

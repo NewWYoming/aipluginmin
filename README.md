@@ -3,7 +3,7 @@
 - 让你的骰娘活起来
 
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Version](https://img.shields.io/badge/Version-5.1.38-green)
+![Version](https://img.shields.io/badge/Version-5.1.44-green)
 
 ## 快速开始
 
@@ -278,7 +278,8 @@ AI骰娘Min是一款面向TRPG玩家（吗？）的智能对话插件，基于Op
 | 记忆辅助模型         | 用于印象生成和记忆总结的轻量模型配置（body格式），为空则复用对话模型                              |
 | 印象·最大观察消息数         | 印象记录前收集的消息条数                              |
 | 印象·最长天数         | 印象未更新后自动刷新的天数                              |
-| 印象·最大长度         | 单条印象最大字符数                              |
+| 印象·请求最大Token         | 印象更新请求的最大输出 token；连续截断三次后临时使用其 1.5 倍                              |
+| 印象·失败通知SealDice通知列表         | 印象更新连续失败后是否通知 SealDice 通知列表（包括 master 和其他配置的通知途径）                              |
 | 印象·清理未活跃天数         | 非活跃用户的印象保留天数                              |
 
 
@@ -308,6 +309,7 @@ AI骰娘Min是一款面向TRPG玩家（吗？）的智能对话插件，基于Op
 | `.ai fgt [assistant/user]` | -                                          | 遗忘当前上下文，不加参数为遗忘全部上下文，assistant为遗忘AI调用函数和发言，user为遗忘用户发言和函数返回 |
 | `.ai role`                 | -                                          | 角色设定切换相关                                                    |
 | `.ai shut`                 | -                                          | 中断AI当前输出                                                      |
+| `.ai name set/add/del/list/clear` | `.ai name set 小明` | 管理当前群/私聊会话内 AI 使用的主昵称和别称；管理员可通过 @用户或QQ号为他人设置，独立于 SealDice 的 `.nn` 命令；同一会话冲突时拒绝并通知 |
 
 ---
 
