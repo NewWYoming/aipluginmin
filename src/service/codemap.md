@@ -12,7 +12,7 @@ The `service/` layer owns **LLM API communication** and the **tool-call iteratio
 
 | Pattern | Where | How |
 |---|---|---|
-| **Strategy** | `AIClient` ↔ `ChatProvider` | AIClient delegates `buildRequestBody()` and `parseResponse()` to a provider implementation selected at construction via `getProvider(config.apiProvider)`. **DeepSeekV4Provider** adds thinking/reasoning_effort fields and preserves `reasoning_content` round-trip. **OpenaiCompatibleProvider** is a generic fallback — passes `extraBody` through without provider-specific logic. |
+| **Strategy** | `AIClient` ↔ `ChatProvider` | AIClient delegates `buildRequestBody()` and `parseResponse()` to a provider implementation selected at construction via `getProvider(config.apiProvider)`. Both existing config IDs use **ChatCompletionsProvider**. `presets.ts` retains the DeepSeek thinking extension and generic defaults; common request invariants and response validation live in one protocol implementation. |
 | **Adapter** | `AIClient` | Unifies different provider wire formats behind a single `chat()` interface. Adds cross-cutting concerns: contextual logging (first request vs. delta), error wrapping, timeout enforcement, usage tracking. |
 | **Loop / Orchestrator** | `ToolCallLoop` | Manages a stateful while-loop: chat → inspect tool_calls → execute via `ToolManager` → append results to messages → repeat. Exposes an `AbortSignal` hook for cancellation. |
 | **Legacy shim** | `legacy.ts` | Standalone functions that directly construct bodies and call `fetch()`. No provider abstraction. Targeted for replacement by AIClient. |
@@ -46,6 +46,8 @@ ToolCallLoop.run(ctx, msg, ai, messages, tools)
 ```
 
 **Key details:**
+- The provider validates the raw response. AIClient records normalized model/usage only after parsing succeeds; it does not inspect `choices` itself.
+- Chat Completions presets cannot inherit `messages`, `stream`, `tools`, or `tool_choice` from `extraBody`; the conversation/tool loop owns those fields.
 - AIClient keeps a `lastLogLen` counter to log only delta messages on subsequent requests (avoids flooding logs with the full context on every tool-call iteration).
 - ToolCallLoop enforces `ConfigManager.tool.maxCallCount` as both a per-turn tool limit and a total loop cap; on cap, in-flight tools still execute and a final `tool_choice='none'` request returns clean text instead of raw AI content (which may contain tool-call JSON).
 - When `this.signal.aborted` is set (via `AbortSignal`), the loop short-circuits and returns empty content.
@@ -54,7 +56,7 @@ ToolCallLoop.run(ctx, msg, ai, messages, tools)
 
 | Consumer / Dependency | Interaction |
 |---|---|
-| **`src/service/providers/`** | `AIClient` imports `getProvider`, `ChatProvider`, and type definitions. Provider modules selected at runtime by `apiProvider` string. `providers/deepseek-v4.ts` supports thinking/reasoning_effort; `providers/openai-compatible.ts` is the generic catch-all. `providers/base.ts` defines the `ChatProvider` abstract class, `ChatResponse`, and supporting types. |
+| **`src/service/providers/`** | `AIClient` imports `getProvider`, `ChatProvider`, and type definitions. Provider modules selected at runtime by `apiProvider` string. `providers/chat-completions.ts` owns the shared wire format; `providers/presets.ts` defines the DeepSeek thinking extension and generic defaults. `providers/base.ts` defines the `ChatProvider` abstract class, `ChatResponse`, and supporting types. |
 | **`src/AI/AI.ts` — `AIManager`** | `AIClient.chat()` and legacy `sendITTRequest`/`getEmbedding` call `AIManager.updateUsage(model, usage)` to track token consumption. |
 | **`src/AI/AI.ts` — `AI` class** | `ToolCallLoop` receives an `AI` instance and calls `ai.context.addToolCallsMessage()` / `ai.context.addToolMessage()` to keep the in-memory context in sync with the API message array. |
 | **`src/tool/tool.ts` — `ToolManager`** | `ToolCallLoop.run()` calls `ToolManager.handleToolCalls()` to execute each tool and collect results. |

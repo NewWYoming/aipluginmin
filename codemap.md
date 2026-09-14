@@ -19,7 +19,7 @@
 | `src/AI/` | Core AI: chat orchestration, context/memory management, image pool, session management | [📄](src/AI/codemap.md) |
 | `src/config/` | SealDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
 | `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
-| `src/service/providers/` | Provider pattern for LLM backends: DeepSeek V4 (thinking mode), OpenAI-compatible generic | [📄](src/service/providers/codemap.md) |
+| `src/service/providers/` | Shared Chat Completions protocol with DeepSeek V4 and generic presets | [📄](src/service/providers/codemap.md) |
 | `src/task.ts` | Task system: TaskManager with CRUD (add/get/update/delete), cron scheduling (daily 0:00 scan), TimerManager alarm integration for deadline/periodic reminders | |
 | `src/tool/` | AI function-calling tools: ~44 tools across COC/TRPG, memory, alias, image, messaging, utility, task domains | [📄](src/tool/codemap.md) |
 | `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management, `.ai task` subcommands (add/list/update/delete) | [📄](src/cmd/codemap.md) |
@@ -59,7 +59,7 @@ Task system:
 
 ## Key Design Patterns
 
-- **Provider Strategy**: `ChatProvider` base class → `DeepSeekV4Provider` / `OpenaiCompatibleProvider`
+- **Provider Strategy**: `ChatProvider` base class → shared `ChatCompletionsProvider` + vendor presets
 - **Session-per-ID**: Each user/group gets an independent AI with isolated context, memory, and image pool
 - **ValidKeys revival**: Custom serde for persistent plugin state (JSON.parse reviver)
 - **Tool registrant**: Each `tool_*.ts` self-registers into `ToolManager.toolMap`

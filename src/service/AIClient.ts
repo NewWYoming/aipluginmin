@@ -1,5 +1,6 @@
 // src/service/AIClient.ts
-import { getProvider, ChatProvider, AIClientConfig, ChatRequest, ChatResponse, OpenAIMessage, ToolInfo, ImageRequest, ThinkingConfig } from './providers';
+import { getProvider, ChatProvider } from './providers';
+import type { AIClientConfig, ChatResponse, OpenAIMessage, ToolInfo, ThinkingConfig } from './providers';
 import { AIManager } from '../AI/AI';
 import { logger } from '../logger';
 import { withTimeout } from '../utils/utils';
@@ -34,22 +35,18 @@ export class AIClient {
     try {
       const data = await withTimeout(() => this.fetchChat(url, apiKey, body), timeout);
 
-      if (data.choices && data.choices.length > 0) {
-        AIManager.updateUsage(data.model, data.usage);
-
-        const response = this.provider.parseResponse(data);
-        logger.info(
-          `响应内容:`, response.content,
-          '\nlatency:', Date.now() - time, 'ms',
-          '\nfinish_reason:', response.finish_reason,
-        );
-        if (response.reasoning_content) {
-          logger.info(`思维链内容:`, response.reasoning_content);
-        }
-        return response;
+      // The provider owns wire validation; accounting only sees normalized data.
+      const response = this.provider.parseResponse(data);
+      AIManager.updateUsage(response.model, response.usage);
+      logger.info(
+        `响应内容:`, response.content,
+        '\nlatency:', Date.now() - time, 'ms',
+        '\nfinish_reason:', response.finish_reason,
+      );
+      if (response.reasoning_content) {
+        logger.info(`思维链内容:`, response.reasoning_content);
       }
-
-      throw new Error(`服务器响应中没有choices或choices为空\n响应体:${JSON.stringify(data, null, 2)}`);
+      return response;
     } catch (e) {
       logger.error(`chat请求出错:`, e.message);
       return {

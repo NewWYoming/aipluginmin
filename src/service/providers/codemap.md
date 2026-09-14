@@ -8,16 +8,16 @@ Concrete responsibilities:
 
 - Define shared request/response types (`ChatRequest`, `ChatResponse`, `OpenAIMessage`, `ToolCall`, etc.)
 - Declare the abstract `ChatProvider` base class with polymorphic methods for building request bodies and parsing responses
-- Implement concrete providers for each supported API backend
+- Implement each wire protocol once; describe compatible vendors through presets
 - Maintain a registry that maps provider name → provider instance
 
 ## 2. Design Patterns
 
 | Pattern | Where | Why |
 |---|---|---|
-| **Strategy** | `ChatProvider` abstract class | Each provider implements its own `buildRequestBody` / `parseResponse` strategy; callers swap strategies by name without conditional logic |
+| **Strategy** | `ChatProvider` abstract class | Each protocol implements `buildRequestBody` / `parseResponse`; compatible vendor IDs share a protocol instance class |
 | **Registry (Map)** | `index.ts` → `registry: Map<string, ChatProvider>` | Providers self-register on import; callers fetch by string name via `getProvider(name)` |
-| **Template Method** | `buildRequestBody(config, messages, tools, tool_choice, thinkingOverride?)` | The method signature is fixed, but each subclass fills in vendor-specific fields (e.g., DeepSeek's `thinking` / `reasoning_effort`) |
+| **Template Method** | `buildRequestBody(config, messages, tools, tool_choice, thinkingOverride?)` | `ChatCompletionsProvider` owns common serialization/validation; a preset hook supplies wire extensions such as DeepSeek thinking |
 | **Static Factory** | `getProvider(name)` | Simple factory — looks up a pre-registered singleton by name, throws on unknown names |
 | **Data Transfer Object (DTO)** | `ChatRequest`, `ChatResponse`, `AIClientConfig`, etc. | Plain interfaces that cross the provider boundary; no business logic attached |
 
@@ -44,23 +44,21 @@ Caller uses ChatResponse.content, .tool_calls, .reasoning_content, .usage
 
 Key details per provider:
 
-- **DeepSeekV4Provider**: Injects `thinking` / `reasoning_effort` into the body; preserves `reasoning_content` on assistant messages (required for multi-turn thinking mode); suppresses `temperature`/`top_p` when thinking is enabled.
-- **OpenaiCompatibleProvider**: Standard OpenAI-format body; no thinking support; always sends `temperature`/`top_p` if configured; ignores the `thinkingOverride` parameter.
+- **`deepseek-v4` preset**: Injects `thinking` / `reasoning_effort` into the body; preserves `reasoning_content` on assistant messages (required for multi-turn thinking mode); suppresses `temperature`/`top_p` when thinking is enabled.
+- **`openai-compatible` preset**: Standard OpenAI-format body; no thinking support; always sends `temperature`/`top_p` if configured; ignores the `thinkingOverride` parameter.
 
 ## 4. Integration Points
 
 ### Depends on
 
-| Dependency | Location |
-|---|---|
-| `Image` type | `src/AI/image.ts` (imported in `base.ts` for `ImageRequest`) |
+Only local protocol types and presets; no SealDice or AI-module runtime imports.
 
 ### What depends on this directory
 
 | Consumer | What it uses |
 |---|---|
 | `src/service/AIClient.ts` (or equivalent HTTP client) | Calls `getProvider()`, then `buildRequestBody()` / `parseResponse()` to perform actual API calls |
-| `ToolCallLoop` (in `src/tool/` or `src/AI/`) | Passes `thinkingOverride` to `buildRequestBody()` to adjust per-call thinking behavior |
+| `ToolCallLoop` (`src/service/ToolCallLoop.ts`) | Passes `thinkingOverride` to `buildRequestBody()` to adjust per-call thinking behavior |
 | Any module that constructs a `ChatRequest` or reads a `ChatResponse` | Imports the shared types via `index.ts` |
 
 ### Exports via `index.ts`
@@ -68,10 +66,33 @@ Key details per provider:
 - **Constructor**: `getProvider(name: string): ChatProvider`
 - **Re-exports**: `ChatProvider` (class), all shared types (`AIClientConfig`, `ChatRequest`, `ChatResponse`, `OpenAIMessage`, `ToolInfo`, `ToolCall`, `ImageRequest`, `ThinkingConfig`)
 
-### Adding a new provider
+### Files and invariants
 
-1. Create `src/service/providers/my-provider.ts`
-2. Extend `ChatProvider`, implement the three abstract members (`name`, `defaultModel`, `defaultUrl`, `supportsThinking`, `supportsReasoningEffort`, `buildRequestBody`, `parseResponse`)
-3. Register in `index.ts` via `register(new MyProvider())`
+- `base.ts`: protocol contract and normalized DTOs. Invalid wire responses throw.
+- `chat-completions.ts`: shared message/tool serialization, envelope validation,
+  and usage normalization, preserving vendor token details.
+- `presets.ts`: stable vendor IDs, defaults, and the DeepSeek thinking extension.
+- `index.ts`: instantiate presets using the shared protocol and keep the registry.
 
-No other file needs to change — the registry lookup is fully dynamic.
+`extraBody` can supply vendor parameters but cannot override `messages`, `stream`,
+`tools`, or `tool_choice`. Requests remain non-streaming. No configured tools means
+omit both tool fields; configured tools with choice `none` retain that explicit
+choice. DeepSeek thinking suppresses sampling fields even from `extraBody`.
+
+### Adding an endpoint or protocol
+
+For an ordinary Chat Completions-compatible endpoint, select `openai-compatible`
+and configure its URL/model/key/extra body; **no new source file is needed**.
+A built-in named preset belongs in `presets.ts` (and the configuration selector,
+if exposing another UI option), not in a duplicated request/response class.
+
+A different wire protocol needs a separate `ChatProvider` implementation with its
+own authentication, serialization, validation and tool-conversation tests. This
+change does **not** implement Responses or Anthropic Messages; it only removes the
+client's hard-coded `choices` check and consolidates the existing protocol.
+
+### Verification
+
+`npm test` runs behavior tests under `tests/service/` using Node 18+ and a
+development-only TypeScript compiler. The client tests stub host logging, usage
+storage, timeout wrapping and HTTP; they do not test SealDice or live APIs.

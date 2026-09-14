@@ -9,7 +9,8 @@
   "keywords": [],
   "scripts": {
     "build": "cross-env NODE_ENV=production node tools/build.js",
-    "build-dev": "cross-env NODE_ENV=dev node tools/build.js"
+    "build-dev": "cross-env NODE_ENV=dev node tools/build.js",
+    "test": "node --test tests/service/ai-client.test.cjs tests/service/providers.test.cjs"
   },
   "engines": {
     "node": ">=10"
@@ -24,7 +25,8 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.21.4",
     "fs-extra": "^11.2.0",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "typescript": "^5.8.3"
   },
   "files": [
     "build/main",

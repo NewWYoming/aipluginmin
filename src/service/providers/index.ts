@@ -1,7 +1,7 @@
 // src/service/providers/index.ts
 import { ChatProvider } from './base';
-import { DeepSeekV4Provider } from './deepseek-v4';
-import { OpenaiCompatibleProvider } from './openai-compatible';
+import { ChatCompletionsProvider } from './chat-completions';
+import { chatCompletionsPresets } from './presets';
 
 const registry: Map<string, ChatProvider> = new Map();
 
@@ -10,8 +10,9 @@ function register(provider: ChatProvider) {
 }
 
 // 内置注册
-register(new DeepSeekV4Provider());
-register(new OpenaiCompatibleProvider());
+for (const preset of chatCompletionsPresets) {
+  register(new ChatCompletionsProvider(preset));
+}
 
 export function getProvider(name: string): ChatProvider {
   const p = registry.get(name);
