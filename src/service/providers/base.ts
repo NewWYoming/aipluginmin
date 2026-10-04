@@ -1,5 +1,4 @@
 // src/service/providers/base.ts
-import { Image } from '../../AI/image';
 
 // --- 请求/响应类型（AIClient 通用）---
 
@@ -110,7 +109,7 @@ export abstract class ChatProvider {
     thinkingOverride?: ThinkingConfig,  // ToolCallLoop 可覆盖思考配置
   ): any;
 
-  /** 解析 API 响应 */
+  /** 校验协议响应并归一化；格式无效时抛出异常 */
   abstract parseResponse(data: any): ChatResponse;
 
   /** 额外 HTTP headers（如 OpenRouter 的 HTTP-Referer） */

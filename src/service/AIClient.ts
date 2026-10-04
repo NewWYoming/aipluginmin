@@ -35,27 +35,23 @@ export class AIClient {
     try {
       const data = await withTimeout(() => this.fetchChat(url, apiKey, body), timeout);
 
-      if (data.choices && data.choices.length > 0) {
-        AIManager.updateUsage(data.model, data.usage);
-
-        const response = this.provider.parseResponse(data);
-        if ((!response.tool_calls || response.tool_calls.length === 0) && isToolCallArtifact(response.content)) {
-          logger.warning('模型将工具调用协议输出到了普通内容，已丢弃该响应');
-          response.content = '';
-          response.finish_reason = 'tool_artifact';
-        }
-        logger.info(
-          `响应内容:`, response.content,
-          '\nlatency:', Date.now() - time, 'ms',
-          '\nfinish_reason:', response.finish_reason,
-        );
-        if (response.reasoning_content) {
-          logger.info(`思维链内容:`, response.reasoning_content);
-        }
-        return response;
+      // The provider owns wire validation; accounting only sees normalized data.
+      const response = this.provider.parseResponse(data);
+      if ((!response.tool_calls || response.tool_calls.length === 0) && isToolCallArtifact(response.content)) {
+        logger.warning('模型将工具调用协议输出到了普通内容，已丢弃该响应');
+        response.content = '';
+        response.finish_reason = 'tool_artifact';
       }
-
-      throw new Error(`服务器响应中没有choices或choices为空\n响应体:${JSON.stringify(data, null, 2)}`);
+      AIManager.updateUsage(response.model, response.usage);
+      logger.info(
+        `响应内容:`, response.content,
+        '\nlatency:', Date.now() - time, 'ms',
+        '\nfinish_reason:', response.finish_reason,
+      );
+      if (response.reasoning_content) {
+        logger.info(`思维链内容:`, response.reasoning_content);
+      }
+      return response;
     } catch (e) {
       logger.error(`chat请求出错:`, e.message);
       return {
