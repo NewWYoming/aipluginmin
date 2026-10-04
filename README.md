@@ -3,7 +3,7 @@
 - 让你的骰娘活起来
 
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Version](https://img.shields.io/badge/Version-5.1.44-green)
+![Version](https://img.shields.io/badge/Version-5.1.50-green)
 
 ## 快速开始
 

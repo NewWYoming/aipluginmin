@@ -3,6 +3,7 @@ import { getProvider, ChatProvider, AIClientConfig, ChatRequest, ChatResponse, O
 import { AIManager } from '../AI/AI';
 import { logger } from '../logger';
 import { withTimeout } from '../utils/utils';
+import { isToolCallArtifact } from './toolCallArtifact';
 
 export class AIClient {
   private config: AIClientConfig;
@@ -38,6 +39,11 @@ export class AIClient {
         AIManager.updateUsage(data.model, data.usage);
 
         const response = this.provider.parseResponse(data);
+        if ((!response.tool_calls || response.tool_calls.length === 0) && isToolCallArtifact(response.content)) {
+          logger.warning('模型将工具调用协议输出到了普通内容，已丢弃该响应');
+          response.content = '';
+          response.finish_reason = 'tool_artifact';
+        }
         logger.info(
           `响应内容:`, response.content,
           '\nlatency:', Date.now() - time, 'ms',

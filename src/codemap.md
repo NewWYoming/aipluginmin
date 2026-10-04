@@ -10,6 +10,7 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 |------|------|
 | `index.ts` | **Plugin entry.** `main()` registers configs, tools, commands (`registerTTS()` for TTS), timers (`TimerManager.init()`, `TaskManager.initCron(ext)` for task daily cron), and memory. Wires three SealDice hooks with AI lifecycle management: `disabledInPrivate` guard + `checkActiveTimer()` poll in all hooks, `evictPrivateInstances()` on disable. |
 | `task.ts` | Task system: `Task` interface (deadline/periodic types with progress, reminders, scope) + `TaskManager` singleton (CRUD, daily scan, alarm creation via TimerManager, timer fire handler). _UTC fix: parseDeadline/parsePeriodNext use Date.UTC + utcOffset correction; createAlarm no longer double-subtracts offset._ |
+| `timer.ts` | Persistent target, interval, and active-time timers. Runs a five-second polling loop, revives stored timers, dispatches task reminders, and routes timer prompts back to the session AI. |
 | `update.ts` | Changelog data (`updateInfo` map), consumed by the `.ai update` command. Not wired in `main()` — imported by commands. |
 
 ### Subdirectories (each has its own codemap.md)
@@ -18,9 +19,9 @@ The `src/` tree is a SealDice JS plugin that gives the dice bot conversational A
 |-----------|------|
 | `config/` | All plugin configuration keys registered via `seal.ext.register*Config`. Central coordinator is `ConfigManager`. Nine config groups: message, request, reply, received, tool, log, backend, image, memory. |
 | `AI/` | Core AI session logic: `AI` class (per-session state + chat dispatch), `Context` (message history, observation collection for impressions), `MemoryManager` (POV-scoped memory, impression layer, composite scoring + LLM rerank), `ImageManager` / `ImagePool` (image handling). |
-| `cmd/` | Chat command system: `root.ts` defines the `SubCmd` base class and `registerCmd()` which creates the `.ai` command and its ~21 subcommands (`standby`, `forget`, `prompt`, `timer`, `image`, `impression`, `memory`, `task`, etc.). |
-| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. ~44 tools across 22 files (`tool_roll_check`, `tool_web`, `tool_alias`, `tool_memory`, `tool_task`, etc.). |
-| `service/` | AI provider abstraction: `AIClient` (HTTP transport), `ToolCallLoop` (execution orchestrator), `providers/` (backend-specific adapters like OpenAI, Claude, etc.). |
+| `cmd/` | Chat command system: `root.ts` defines the `SubCmd` base class and `registerCmd()` which creates the `.ai` command and its 19 registered subcommands (`standby`, `forget`, `prompt`, `timer`, `image`, `impression`, `memory`, `task`, etc.). |
+| `tool/` | AI function-calling toolkit. `ToolManager` in `tool.ts` defines the tool schema system and loops. 54 registered tools across 24 active modules (`tool_roll_check`, `tool_web`, `tool_alias`, `tool_memory`, `tool_task`, etc.). |
+| `service/` | AI transport and orchestration: `AIClient` (HTTP, usage accounting, ordinary-content protocol guard), `ToolCallLoop` (tool execution and thinking-stage selection), `toolCallArtifact.ts`, `legacy.ts`, and `providers/`. |
 | `utils/` | Shared utilities: string handling, SealDice context scaffolding (`utils_seal`), message processing (`utils_message`), OB11 API (`utils_ob11`), update checker (`utils_update`). |
 | `logger.ts` | Singleton `Logger` instance. Logs with configurable verbosity (off / brief / detailed). Respects `logLevel` from config. |
 | `task.ts` | Task system: `Task` interface + `TaskManager` singleton with CRUD, daily cron scan, TimerManager alarm integration, and reminder injection via AI.enqueueReminder. _UTC fix: parseDeadline/parsePeriodNext use Date.UTC + utcOffset correction; createAlarm no longer double-subtracts offset._ |
@@ -78,7 +79,7 @@ SealDice Event
 AI.chat(ctx, msg, source)
     │
     ├── buildPrompt() → assembles system prompt + context messages
-    ├── AIClient.request() → HTTP POST to AI backend (OpenAI/Claude/etc.)
+    ├── AIClient.chat() → HTTP POST to AI backend (DeepSeek V4/OpenAI-compatible)
     │       │
     │       └── ToolCallLoop (if function-calling enabled)
     │               ├── parse tool call from response
@@ -86,6 +87,7 @@ AI.chat(ctx, msg, source)
     │               ├── append tool result to context
     │               └── re-request AI (cycle up to N times)
     │
+    ├── if no tools: AIClient checks for tool-call protocol artifacts and retries once with natural-language instructions
     ├── handleReply() → processes response text (macro expansion, CQ codes)
     └── replyToSender() → sends final message via SealDice API
 ```

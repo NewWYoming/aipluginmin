@@ -193,7 +193,17 @@ export class AI {
                 await this.reply(ctx, msg, contextArray, replyArray, images);
             }
         } else {
-            const response = await client.chat(messages, null, 'none');
+            let response = await client.chat(messages, null, 'none');
+            if (response.finish_reason === 'tool_artifact') {
+                logger.warning('检测到工具调用协议残片，要求模型重新生成普通自然语言回复');
+                response = await client.chat(messages.concat({
+                    role: 'user',
+                    content: '请不要输出任何工具调用协议、DSML、XML 或函数调用格式。请直接用普通自然语言给出最终回复。',
+                }), null, 'none', {
+                    enabled: requestConfig.thinkingEnabled,
+                    effort: requestConfig.reasoningEffort,
+                });
+            }
             const { contextArray, replyArray, images } = await handleReply(ctx, msg, this, response.content);
             await this.reply(ctx, msg, contextArray, replyArray, images);
         }

@@ -20,7 +20,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_modu.ts` | `modu_roll`, `modu_search` | COC module/story |
 | `tool_deck.ts` | `list_decks`, `draw_deck` | Card decks |
 | `tool_jrrp.ts` | `jrrp` | Daily luck |
-| `tool_image.ts` | `image_to_text`, `text_to_image`, `list_images`, `send_image` | Image processing — **deprecated**, `registerImage()` commented out in `tool.ts` |
+| `tool_image.ts` | `image_to_text`, `list_images`, `send_image` | Image recognition and image-pool operations; registered by `ToolManager.registerTool()`. The legacy `text_to_image` implementation remains commented out. |
 | `tool_render.ts` | `render_markdown`, `render_html` | Content→image rendering |
 | `tool_voice.ts` | `text_to_sound` | Voice / TTS (custom & API modes) |
 | `tool_music.ts` | `music_play` | Music search & play |
@@ -39,7 +39,7 @@ This bridges the gap between natural-language AI output and concrete bot actions
 | `tool_trigger.ts` | `set_trigger_condition` | Proactive trigger conditions |
 | `tool_run_command.ts` | `run_command` | Universal command invocation — AI calls any command from configured SealDice extensions (whitelist + blacklist gated) |
 
-Total: **~49 tools** across **24 files** (22 active tool files + tool.ts + sample.ts). `tool_record.ts` removed, `tool_image.ts` deprecated (file kept, registration commented out).
+Total: **54 registered tools** across **24 active tool modules** (plus `tool.ts` framework and `sample.ts` reference). `tool_record.ts` was removed; `tool_image.ts` remains active and is registered by `ToolManager.registerTool()`.
 
 ---
 
@@ -74,7 +74,6 @@ ToolManager.registerTool()
   ├─ registerMusicPlay() → tool_music.ts
   ├─ registerRender()    → tool_render.ts
   └─ registerRunCommand()→ tool_run_command.ts
-      // registerImage() commented out
 ```
 
 ### 3b. Class-per-Tool with Static Registry
@@ -250,4 +249,4 @@ ToolManager.handleToolCall(ctx, msg, ai, tool_call)
 | **External HTTP** | `web_search`, `web_read`, `music_play`, `render_markdown`, `render_html`, `text_to_sound` (API mode) | Backend services (Jina API / SearXNG / render / music API / DashScope TTS) |
 | **Plugin-dependent** | `text_to_sound` (custom voice mode) | `AITTS` plugin + ffmpeg |
 | **Cross-session** (switches AI context) | `send_msg`, `get_context`, `add_memory`, `del_memory`, `search_memory`, `clear_memory` | Uses `AIManager.getAI()` + `getCtxAndMsg()` |
-| **Deprecated / Unregistered** | `image_to_text`, `text_to_image`, `list_images`, `send_image` | `tool_image.ts` file kept, registration commented out |
+| **Image / image-pool** | `image_to_text`, `list_images`, `send_image` | `tool_image.ts` and the configured image backend; `text_to_image` is retained as commented legacy code |

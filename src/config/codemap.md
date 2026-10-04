@@ -92,7 +92,7 @@ Runtime access (any module):
 ### `config.ts` — Constants
 
 This file is not a config class. It exports plain constants used throughout the plugin:
-- `VERSION` (currently `5.1.44`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata. `NAME` remains `aiplugin4` for configuration compatibility.
+- `VERSION` (currently `5.1.50 in the uncommitted worktree`, bumped on every `src/` change — mirrored in `header.txt` `@version`), `AUTHOR`, `NAME` — plugin metadata. `NAME` remains `aiplugin4` for configuration compatibility.
 - `CQTYPESALLOW` — allowed CQ message types.
 - `PRIVILEGELEVELMAP` — role-to-permission-level mapping.
 - `HELPMAP` — help text definitions for commands.

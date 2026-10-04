@@ -60,7 +60,7 @@ Key details per provider:
 | Consumer | What it uses |
 |---|---|
 | `src/service/AIClient.ts` (or equivalent HTTP client) | Calls `getProvider()`, then `buildRequestBody()` / `parseResponse()` to perform actual API calls |
-| `ToolCallLoop` (in `src/tool/` or `src/AI/`) | Passes `thinkingOverride` to `buildRequestBody()` to adjust per-call thinking behavior |
+| `ToolCallLoop` (in `src/service/`) | Passes `thinkingOverride` to `buildRequestBody()` to adjust per-call thinking behavior |
 | Any module that constructs a `ChatRequest` or reads a `ChatResponse` | Imports the shared types via `index.ts` |
 
 ### Exports via `index.ts`

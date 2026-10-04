@@ -14,6 +14,29 @@ export class ToolCallLoop {
   private callCount: number;
   private signal?: AbortSignal;
 
+  private async retryAsNaturalLanguage(messages: OpenAIMessage[], thinking: ThinkingConfig): Promise<ChatResponse> {
+    const retryMessages = messages.concat({
+      role: 'user',
+      content: '请不要输出任何工具调用协议、DSML、XML 或函数调用格式。请直接用普通自然语言给出最终回复。',
+    });
+    logger.warning('检测到工具调用协议残片，要求模型重新生成普通自然语言回复');
+    return this.client.chat(retryMessages, null, 'none', thinking);
+  }
+
+  private getReplyThinking(): ThinkingConfig {
+    return {
+      enabled: this.config.thinkingEnabled,
+      effort: this.config.reasoningEffort,
+    };
+  }
+
+  private getToolThinking(): ThinkingConfig {
+    return {
+      enabled: this.config.toolThinkingEnabled,
+      effort: this.config.toolReasoningEffort,
+    };
+  }
+
   constructor(client: AIClient, config: AIClientConfig, signal?: AbortSignal) {
     this.client = client;
     this.config = config;
@@ -38,11 +61,11 @@ export class ToolCallLoop {
         return { content: '', images: [], tool_calls_occurred };
       }
 
-      // DeepSeek supports thinking + tool calls simultaneously
-      const thinking: ThinkingConfig = {
-        enabled: this.config.thinkingEnabled,
-        effort: this.config.reasoningEffort,
-      };
+      // 第一轮可能直接生成普通回复，必须使用普通回复思考配置；
+      // 已经发生工具调用后，后续工具选择轮次才使用工具阶段配置。
+      const thinking = this.callCount === 0
+        ? this.getReplyThinking()
+        : this.getToolThinking();
 
       // 每次带上当前 tools + 上限控制 tool_choice
       const tool_choice = this.callCount >= this.maxCallCount ? 'none' : 'auto';
@@ -57,6 +80,10 @@ export class ToolCallLoop {
 
       // 无工具调用，返回最终 content
       if (!response.tool_calls || response.tool_calls.length === 0) {
+        if (response.finish_reason === 'tool_artifact') {
+          const retryResponse = await this.retryAsNaturalLanguage(messages, this.getReplyThinking());
+          return { content: retryResponse.content, images: [], tool_calls_occurred };
+        }
         logger.info('对话结束');
         return { content: response.content, images: [], tool_calls_occurred };
       }
@@ -110,7 +137,12 @@ export class ToolCallLoop {
     }
 
     // 上限触发后的最终回复
-    const finalResponse = await this.client.chat(messages, null, 'none');
+    const replyThinking = this.getReplyThinking();
+    const finalResponse = await this.client.chat(messages, null, 'none', replyThinking);
+    if (finalResponse.finish_reason === 'tool_artifact') {
+      const retryResponse = await this.retryAsNaturalLanguage(messages, replyThinking);
+      return { content: retryResponse.content, images: [], tool_calls_occurred };
+    }
     return { content: finalResponse.content, images: [], tool_calls_occurred };
   }
 }

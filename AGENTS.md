@@ -104,6 +104,10 @@ src/index.ts          → main() entry, wires everything
 src/config/           → plugin config registration (seal.ext.register*Config)
 src/tool/             → AI function-calling tools (file: tool_xxx.ts)
 src/AI/               → core AI chat, context, memory, image handling
+src/service/          → provider-neutral HTTP client, tool-call loop, protocol-artifact guard
+src/service/providers/ → DeepSeek V4 and OpenAI-compatible request/response adapters
+src/task.ts           → persistent deadline/periodic task manager and reminder scheduling
+src/timer.ts          → persistent target/interval/active-time timer loop
 src/cmd/              → chat commands (.ai, .img, .timer, etc.)
 src/utils/            → shared utilities
 ```
@@ -111,6 +115,15 @@ src/utils/            → shared utilities
 - Tools are registered in `src/tool/tool.ts` → `ToolManager.registerTool()`. Each tool file exports a registration function.
 - Config keys are registered in `src/config/configManager.ts`. Each config file exports a class/function that registers its group of keys.
 - Session-scoped AI instances are managed by `AIManager.getAI(sid)` keyed by user/group ID.
+- `AIClient` owns provider dispatch, timeout/error handling, usage accounting, and the ordinary-content `tool_artifact` guard. `ToolCallLoop` uses reply thinking for the first/final natural-language request and tool thinking only after a structured tool call.
+- `src/service/toolCallArtifact.ts` must remain conservative: it blocks protocol-shaped DSML/XML/function-call text, while ordinary mentions of those terms must remain valid content.
+
+## Verification boundaries
+
+- `npm run build` is the repository's static acceptance gate; it produces `dist/aipluginmin.js` and automatically backs up the previous artifact.
+- `git diff --check` is required for documentation and source changes.
+- Build and static checks do not prove live provider behavior, thinking parameters, SealDice notification delivery, storage revival, or command/`.nn`/group-card behavior. Report those as pending until tested in a real SealDice instance with the configured provider.
+- The current project status belongs in the task report and Git diff. Do not treat an uncommitted worktree snapshot as a release or as evidence that real runtime testing passed.
 
 ## Conventions
 

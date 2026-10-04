@@ -15,6 +15,12 @@ This directory is the **brain of the plugin**. It manages per-session AI instanc
 
 ---
 
+## Current service boundary
+
+`AI.chat()` builds an `AIClient` from `ConfigManager.request`. The no-tool path calls the client directly; the tool-enabled path enters `ToolCallLoop`. Both paths treat `finish_reason: 'tool_artifact'` as a rejected ordinary response and retry once with a natural-language instruction. `MemoryManager.updateImpression()` also rejects protocol-shaped text before it can be stored as an impression.
+
+The request configuration has two thinking phases: `thinkingEnabled`/`reasoningEffort` for the first and final natural-language requests, and `toolThinkingEnabled`/`toolReasoningEffort` for requests after structured tool calls. The provider may ignore these overrides when it does not support thinking.
+
 ## Design Patterns
 
 | Pattern | Where | How |
@@ -57,10 +63,10 @@ AI.chat(reason)
   │     └─ MemoryManager.buildMemoryPrompt() (POV-filtered + scored + reranked memories)
   ├─ AIManager.saveAI(id) → persist context state before tool-call loop (persist-on-receive)
   │
-  ├─ [if tools enabled] ToolCallLoop.run() → multi-turn function calling
+  ├─ [if tools enabled] ToolCallLoop.run() → multi-turn function calling with reply/tool thinking phases
   │     └─ Each tool call: context.addToolCallsMessage() → execute → context.addToolMessage()
   │
-  ├─ [else] AIClient.chat() → single-turn completion
+  ├─ [else] AIClient.chat() → single-turn completion; `tool_artifact` triggers one natural-language retry
   │
   ├─ handleReply() → parse response into reply segments (text + images + context)
   ├─ AI.reply() → for each segment: replyToSender() + context.addMessage() (role=assistant)

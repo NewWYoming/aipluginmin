@@ -2,6 +2,12 @@
 
 > A SealDice JS plugin that makes the dice bot converse like a human. Single bundled JS output loaded by SealDice.
 
+## Current implementation status
+
+- The `main` worktree contains the scoped-name and resilient-impression work from `07d3750`.
+- The current uncommitted worktree also contains version `5.1.50` changes for detecting tool-call protocol text emitted as ordinary content and for separating reply thinking from tool-stage thinking. These changes are build-verified but still await real provider/SealDice testing and user review before commit.
+- `origin/main` and the current worktree are separate Git states; use `git status` and the diff as the source of truth before committing.
+
 ## System Entry Points
 
 | Entry | Role |
@@ -18,12 +24,13 @@
 | `src/` | Plugin entry (hooks wiring, AI lifecycle, disabledInPrivate guard), logger, timer system, version update | [📄](src/codemap.md) |
 | `src/AI/` | Core AI: chat orchestration, context/memory management, image pool, session management | [📄](src/AI/codemap.md) |
 | `src/config/` | SealDice plugin config registration & typed runtime access via ConfigManager cache | [📄](src/config/codemap.md) |
-| `src/service/` | LLM API communication layer: AIClient (HTTP), ToolCallLoop (tool orchestration), legacy utilities | [📄](src/service/codemap.md) |
+| `src/service/` | LLM API communication layer: AIClient (HTTP and response guard), ToolCallLoop (tool orchestration), artifact detector, legacy utilities | [📄](src/service/codemap.md) |
 | `src/service/providers/` | Provider pattern for LLM backends: DeepSeek V4 (thinking mode), OpenAI-compatible generic | [📄](src/service/providers/codemap.md) |
 | `src/task.ts` | Task system: TaskManager with CRUD (add/get/update/delete), cron scheduling (daily 0:00 scan), TimerManager alarm integration for deadline/periodic reminders | |
-| `src/tool/` | AI function-calling tools: ~44 tools across COC/TRPG, memory, alias, image, messaging, utility, task domains | [📄](src/tool/codemap.md) |
+| `src/tool/` | 54 registered AI function-calling tools across 24 active tool modules, covering COC/TRPG, memory, alias, image, messaging, utility, task, and extension-bridge domains | [📄](src/tool/codemap.md) |
 | `src/cmd/` | Chat command dispatch system: `.ai`, `.img`, `.timer` etc. with privilege management, `.ai task` subcommands (add/list/update/delete) | [📄](src/cmd/codemap.md) |
-| `src/cmd/sub_cmd/` | Individual subcommand implementations (18 commands) | [📄](src/cmd/sub_cmd/codemap.md) |
+| `src/cmd/sub_cmd/` | Individual `.ai` subcommand implementations (19 registered commands) | [📄](src/cmd/sub_cmd/codemap.md) |
+| `types/` | Incomplete global SealDice runtime declarations used by TypeScript and esbuild | [📄](types/codemap.md) |
 | `src/utils/` | Shared utilities: string parsing, message formatting, OB11 bridge, SealDice helpers | [📄](src/utils/codemap.md) |
 
 ## Architecture Overview
@@ -36,8 +43,9 @@ AI lifecycle (all hooks):
 Message processing:
 onNotCommandReceived → index.ts routes → AI.chat()
   → handleMessages() assembles system prompt + context + POV-scoped memories + impressions
-  → ToolCallLoop (thinking-enabled) iterates tool calls via AIClient
+  → ToolCallLoop separates first/final reply thinking from post-tool thinking, iterates tool calls via AIClient
   → Provider (DeepSeek V4 / OpenAI-compatible) handles API specifics
+  → isToolCallArtifact() rejects DSML/XML/function-call protocol text that leaked into ordinary content
   → handleReply() parses response → replyToSender()
   → context.addMessage() persists to messages array, collects user observations (Tier 1)
 
@@ -64,3 +72,4 @@ Task system:
 - **ValidKeys revival**: Custom serde for persistent plugin state (JSON.parse reviver)
 - **Tool registrant**: Each `tool_*.ts` self-registers into `ToolManager.toolMap`
 - **Config namespace isolation**: Each config group uses separate `ext` namespace prefix
+- **Response boundary guard**: `AIClient` marks protocol-shaped ordinary content as `finish_reason: 'tool_artifact'`; the AI and tool loop retry with a natural-language prompt, while impression generation refuses to persist contaminated text.

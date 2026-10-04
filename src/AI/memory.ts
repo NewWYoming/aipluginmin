@@ -7,6 +7,7 @@ import { logger } from "../logger";
 import { fmtDate, fixJsonString } from "../utils/utils_string";
 import { Image, ImageManager } from "./image";
 import { UserNameManager } from "./user_names";
+import { isToolCallArtifact } from "../service/toolCallArtifact";
 
 export interface searchOptions {
     topK: number;
@@ -662,6 +663,7 @@ export class MemoryManager {
             const parsed = JSON.parse(fixedContent || fencedContent);
             const impression = typeof parsed?.impression === 'string' ? parsed.impression.trim() : '';
             if (!impression) throw new Error('响应缺少非空 impression 字段');
+            if (isToolCallArtifact(impression)) throw new Error('响应包含工具调用协议残片');
 
             this.impressions[uid] = {
               text: impression,
