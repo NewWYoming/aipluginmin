@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Contains the esbuild-based development and production build scripts for AI骰娘Min.
+Contains the esbuild-based development and production build scripts for dicemin.
 
 ## Design patterns
 

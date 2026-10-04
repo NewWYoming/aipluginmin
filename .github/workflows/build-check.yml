@@ -11,14 +11,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: '18'
+
+      - name: Read plugin version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node -e 'const fs=require("fs"); const text=fs.readFileSync("src/config/config.ts", "utf8"); const match=text.match(/VERSION\s*=\s*"([^"]+)"/); if (!match) process.exit(1); process.stdout.write(match[1]);')"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm install
@@ -29,8 +40,60 @@ jobs:
       - name: Run build
         run: npm run build
 
+      - name: Upload release artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: aipluginmin-build-${{ github.sha }}
+          path: dist/aipluginmin.js
+          if-no-files-found: error
+
       - name: Check build status
         if: failure()
         run: |
           echo "Build failed. Please check the errors above."
           exit 1
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Check for existing release
+        id: existing_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v${{ needs.build.outputs.version }}
+        run: |
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download release artifact
+        if: steps.existing_release.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: aipluginmin-build-${{ github.sha }}
+          path: dist
+
+      - name: Rename release artifact
+        if: steps.existing_release.outputs.exists != 'true'
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: mv dist/aipluginmin.js "dist/aipluginmin-v${VERSION}.js"
+
+      - name: Create GitHub Release
+        if: steps.existing_release.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2.0.8
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: dicemin v${{ needs.build.outputs.version }}
+          generate_release_notes: true
+          files: dist/aipluginmin-v${{ needs.build.outputs.version }}.js

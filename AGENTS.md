@@ -2,7 +2,7 @@
 
 ## What this is
 
-A SealDice JS plugin (AI骰娘Min) that makes the dice bot converse like a human. Runs inside the SealDice host runtime. Its public bundle is `aipluginmin.js`; the internal `aiplugin4` SealDice configuration namespace is retained for compatibility.
+A SealDice JS plugin (dicemin) that makes the dice bot converse like a human. Runs inside the SealDice host runtime. Its public bundle is `aipluginmin.js`; the internal `aiplugin4` SealDice configuration namespace is retained for compatibility.
 
 ## Build
 

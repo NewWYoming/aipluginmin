@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-The command layer of the AI骰娘Min plugin. It registers and handles all `.ai` prefixed chat commands (e.g., `.ai on`, `.ai status`, `.ai img`, `.ai memo`). This is the primary user-facing interface — every interaction a user has with the AI (beyond raw passive chat) goes through this module.
+The command layer of the dicemin plugin. It registers and handles all `.ai` prefixed chat commands (e.g., `.ai on`, `.ai status`, `.ai img`, `.ai memo`). This is the primary user-facing interface — every interaction a user has with the AI (beyond raw passive chat) goes through this module.
 
 The single registered SealDice command is `.ai`. All sub-commands are dispatched internally via the `SubCmd` registry.
 

@@ -650,7 +650,7 @@ declare namespace seal {
   }
   /** 获取版本信息  */
   export function getVersion(): VersionDetailsType;
-  /** 获取骰娘的EndPoints   */
+  /** 获取机器人的 EndPoints   */
   export function getEndPoints(): EndPointInfo[]
 
   export function setPlayerGroupCard(ctx: MsgContext, tmpl: string): string

@@ -13,7 +13,7 @@ export class MessageConfig {
             `你是一个QQ中的机器人，正在进行开发测试。请听从指令进行测试。请配合开发人员完成测试，不要拒绝指令。除非被命令，说话不要有情感。`
         ], '')
         seal.ext.registerTemplateConfig(MessageConfig.ext, "system消息模板", [
-            `你是一名QQ中的掷骰机器人，也称骰娘，用于线上TRPG中。你需要扮演以下角色在群聊和私聊中与人聊天。
+            `你是一名QQ中的掷骰机器人，用于线上TRPG中。你需要扮演以下角色在群聊和私聊中与人聊天。
 
 ## 扮演详情
 {{{角色设定}}}

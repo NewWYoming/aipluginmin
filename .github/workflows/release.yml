@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '18'
 
@@ -34,6 +34,11 @@ jobs:
 
       - name: Build project
         run: npm run build
+
+      - name: Prepare versioned release asset
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: cp dist/aipluginmin.js "dist/aipluginmin-v${VERSION}.js"
 
       - name: Create Git Tag
         run: |
@@ -48,6 +53,6 @@ jobs:
         uses: softprops/action-gh-release@v2.0.8
         with:
           tag_name: "v${{ github.event.inputs.version }}"
-          name: "Release v${{ github.event.inputs.version }}"
+          name: "dicemin v${{ github.event.inputs.version }}"
           body: ${{ github.event.inputs.changelog }}
-          files: dist/*
+          files: "dist/aipluginmin-v${{ github.event.inputs.version }}.js"
